@@ -268,7 +268,7 @@ io.on('connection', (socket) => {
 
     const game = db.getGame(gameId);
     const players = db.getPlayers(gameId);
-    if (players.length < 2) return callback({ error: 'Need at least 2 players' });
+    if (players.length < 1) return callback({ error: 'Need at least 1 player' });
 
     let state = activeGames.get(gameId);
 

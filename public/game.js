@@ -156,6 +156,32 @@ function joinGameByCode(code) {
 }
 
 // ==================== CREATE/JOIN ====================
+document.getElementById('btn-play-bots').addEventListener('click', () => {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) return showToast('Please enter your name');
+  myName = name;
+  haptic('light');
+
+  socket.emit('create-game', { playerName: name }, (res) => {
+    if (res.error) return showToast(res.error);
+    gameId = res.gameId;
+    roomCode = res.code;
+    myColor = res.color;
+    gameState = res.state;
+    players = res.players;
+    saveSession();
+
+    // Immediately start with bots
+    socket.emit('start-game', (startRes) => {
+      if (startRes.error) return showToast(startRes.error);
+      players = startRes.players;
+      gameState = startRes.state;
+      enterGame();
+      haptic('success');
+    });
+  });
+}, { passive: true });
+
 document.getElementById('btn-create').addEventListener('click', () => {
   const name = document.getElementById('player-name').value.trim();
   if (!name) return showToast('Please enter your name');
