@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Chaturaji - Four Kings Chess Online</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f0f1a">
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chaturaji">
+<link rel="apple-touch-icon" href="/icons/icon-192.svg">
+
+<!-- Favicon -->
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+
+<!-- Prevent phone number detection -->
+<meta name="format-detection" content="telephone=no">
+
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<!-- ==================== LOBBY SCREEN ==================== -->
+<div id="lobby-screen" class="screen active">
+  <div class="lobby-container">
+    <div class="logo">
+      <h1>Chaturaji</h1>
+      <p class="subtitle">Four Kings Chess — Online Multiplayer</p>
+    </div>
+
+    <div class="lobby-card">
+      <div class="input-group">
+        <label for="player-name">Your Name</label>
+        <input type="text" id="player-name" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+      </div>
+
+      <div class="lobby-actions">
+        <button id="btn-create" class="btn btn-primary btn-lg">
+          <span class="btn-icon">+</span> Create Game
+        </button>
+        <div class="divider"><span>or</span></div>
+        <div class="join-row">
+          <input type="text" id="join-code" placeholder="Room code" maxlength="6" autocomplete="off" style="text-transform:uppercase">
+          <button id="btn-join" class="btn btn-secondary">Join</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lobby-card" id="open-games-card">
+      <h3>Open Games</h3>
+      <div id="open-games-list" class="games-list">
+        <p class="muted">Loading...</p>
+      </div>
+      <button id="btn-refresh" class="btn btn-ghost btn-sm">Refresh</button>
+    </div>
+
+    <div class="lobby-card" id="recent-games-card">
+      <h3>Recent Games</h3>
+      <div id="recent-games-list" class="games-list">
+        <p class="muted">Loading...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== WAITING ROOM ==================== -->
+<div id="waiting-screen" class="screen">
+  <div class="waiting-container">
+    <h2>Waiting for Players</h2>
+    <div class="room-code-display">
+      <span class="label">Room Code</span>
+      <span id="room-code" class="code"></span>
+      <button id="btn-copy-code" class="btn btn-ghost btn-sm">Copy</button>
+    </div>
+    <div id="waiting-players" class="waiting-players"></div>
+    <p class="muted">Share the room code with friends. Game starts when 4 players join.</p>
+    <div class="waiting-actions">
+      <button id="btn-start-bots" class="btn btn-secondary">Fill with Bots & Start</button>
+      <button id="btn-leave" class="btn btn-ghost">Leave</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== GAME SCREEN ==================== -->
+<div id="game-screen" class="screen">
+  <div class="game-layout">
+    <!-- Left: Player info -->
+    <div class="game-sidebar sidebar-left">
+      <div class="panel" id="turn-panel">
+        <div id="turn-indicator" class="turn-indicator">Waiting...</div>
+      </div>
+
+      <div class="panel">
+        <h3>Players</h3>
+        <div id="game-players"></div>
+      </div>
+
+      <div class="panel" id="dice-panel">
+        <h3>Dice</h3>
+        <div class="dice-area">
+          <button id="btn-roll" class="btn btn-primary btn-roll" disabled>Roll Dice</button>
+          <div class="dice-display">
+            <div class="die" id="die-1">-</div>
+            <div class="die" id="die-2">-</div>
+          </div>
+          <button id="btn-skip" class="btn btn-danger btn-sm" style="display:none">Skip Remaining</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Room: <span id="game-room-code" class="highlight"></span></h3>
+      </div>
+    </div>
+
+    <!-- Center: Board -->
+    <div class="board-area">
+      <div id="board" class="board"></div>
+    </div>
+
+    <!-- Right: Chat + Move History -->
+    <div class="game-sidebar sidebar-right">
+      <div class="panel tabs-panel">
+        <div class="tabs">
+          <button class="tab active" data-tab="moves">Moves</button>
+          <button class="tab" data-tab="chat">Chat</button>
+        </div>
+
+        <div class="tab-content active" id="tab-moves">
+          <div id="move-history" class="move-history"></div>
+        </div>
+
+        <div class="tab-content" id="tab-chat">
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
+            <button id="btn-send-chat" class="btn btn-primary btn-sm">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="replay-panel" style="display:none">
+        <h3>Replay</h3>
+        <div class="replay-controls">
+          <button id="btn-replay-start" class="btn btn-ghost btn-sm">|&lt;</button>
+          <button id="btn-replay-prev" class="btn btn-ghost btn-sm">&lt;</button>
+          <span id="replay-counter">0 / 0</span>
+          <button id="btn-replay-next" class="btn btn-ghost btn-sm">&gt;</button>
+          <button id="btn-replay-end" class="btn btn-ghost btn-sm">&gt;|</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== GAME OVER OVERLAY ==================== -->
+<div id="game-over-overlay" class="overlay">
+  <div class="overlay-content">
+    <h2 id="winner-text"></h2>
+    <p id="winner-stats"></p>
+    <div class="overlay-actions">
+      <button id="btn-replay" class="btn btn-secondary">Watch Replay</button>
+      <button id="btn-back-lobby" class="btn btn-primary">Back to Lobby</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Backend URL - change this to your Render URL after deploying
+  window.BACKEND_URL = window.location.hostname === 'localhost'
+    ? ''  // local dev: same origin
+    : 'https://YOUR-APP-NAME.onrender.com';  // TODO: replace with your Render URL
+</script>
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="/game.js"></script>
+</body>
+</html>
