@@ -202,6 +202,27 @@ function addPawnMoves(board, row, col, piece, moves) {
   }
 }
 
+// When a pawn reaches the far edge, resurrect the first dead major piece (elephant > horse > boat)
+function checkPawnPromotion(state, row, col) {
+  const piece = state.board[row][col];
+  if (!piece || piece.type !== 'pawn') return null;
+  const color = piece.color;
+  const dir = INITIAL_SETUP[color].pawnDir;
+  let atFarEnd = false;
+  if (dir[0] === -1 && row === 0) atFarEnd = true;  // Red moves north
+  if (dir[0] === 1  && row === 7) atFarEnd = true;  // Green moves south
+  if (dir[1] === -1 && col === 0) atFarEnd = true;  // Yellow moves west
+  if (dir[1] === 1  && col === 7) atFarEnd = true;  // Black moves east
+  if (!atFarEnd) return null;
+  for (const type of ['elephant', 'horse', 'boat']) {
+    if (!hasPiece(state.board, color, type)) {
+      state.board[row][col] = { type, color };
+      return type;
+    }
+  }
+  return null; // All major pieces still alive — pawn waits at far edge
+}
+
 function hasAnyValidMove(state) {
   const types = getAvailablePieceTypes(state);
   for (let r = 0; r < 8; r++)
@@ -244,6 +265,12 @@ function executeMove(state, fromRow, fromCol, toRow, toCol) {
   next.board[toRow][toCol] = next.board[fromRow][fromCol];
   next.board[fromRow][fromCol] = null;
 
+  // Check pawn promotion
+  let promotion = null;
+  if (piece.type === 'pawn') {
+    promotion = checkPawnPromotion(next, toRow, toCol);
+  }
+
   // Use a die
   useDie(next, piece.type);
 
@@ -254,6 +281,7 @@ function executeMove(state, fromRow, fromCol, toRow, toCol) {
     from: { row: fromRow, col: fromCol, notation: colLetters[fromCol] + (8 - fromRow) },
     to: { row: toRow, col: toCol, notation: colLetters[toCol] + (8 - toRow) },
     captured,
+    promotion: promotion || undefined,
     dice: [...state.dice],
     turn: state.turnNumber,
     timestamp: Date.now(),

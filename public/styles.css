@@ -323,6 +323,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .move-entry { padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,0.02); }
 .move-entry .turn-num { color: var(--text-muted); margin-right: 6px; }
 .move-entry .capture { color: var(--red); font-weight: 600; }
+.move-entry .promotion { color: #a78bfa; font-weight: 600; }
 .move-entry.king-capture { background: rgba(239, 68, 68, 0.1); }
 
 /* ==================== CHAT ==================== */
@@ -343,6 +344,11 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .chat-msg .chat-time { color: var(--text-muted); font-size: 0.75em; margin-left: 6px; }
 .chat-input-row { display: flex; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
 .chat-input-row input { flex: 1; padding: 8px 10px; }
+
+/* ==================== PIECE LEGEND ==================== */
+.piece-legend { font-size: 0.78rem; }
+.legend-row { padding: 3px 0; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.leg-sym { font-size: 1.1em; flex-shrink: 0; width: 18px; text-align: center; }
 
 /* ==================== REPLAY ==================== */
 .replay-controls {

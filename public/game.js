@@ -20,9 +20,10 @@ let replayMoves = [];
 
 const PLAYERS = ['red', 'yellow', 'green', 'black'];
 const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Black' };
+// ♚=King ♜=Elephant(rook-mover) ♞=Horse(knight-mover) ♝=Boat(diagonal-jumper) ♟=Pawn
 const PIECE_ICONS = {
   king: '\u265A', elephant: '\u265C', horse: '\u265E',
-  boat: '\u2658', pawn: '\u265F'
+  boat: '\u265D', pawn: '\u265F'
 };
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 
@@ -451,6 +452,7 @@ function onCellClick(row, col) {
         lastMove = { from: res.move.from, to: res.move.to };
         addMoveToHistory(res.move);
         if (res.move.captured) haptic('heavy');
+        if (res.move.promotion) showToast(`Pawn promoted to ${res.move.promotion}!`, 2000);
       }
       selectedCell = null;
       validMoves = [];
@@ -521,10 +523,13 @@ function addMoveToHistory(move) {
   const capText = move.captured
     ? ` <span class="capture">x${move.captured.type}</span>`
     : '';
+  const promoText = move.promotion
+    ? ` <span class="promotion">=>${move.promotion}</span>`
+    : '';
   div.innerHTML = `
     <span class="turn-num">${move.turn}.</span>
     <span style="color:${PLAYER_COLORS[move.player]}">${PLAYER_NAMES[move.player]}</span>
-    ${move.piece} ${move.from.notation}-${move.to.notation}${capText}
+    ${move.piece} ${move.from.notation}-${move.to.notation}${capText}${promoText}
   `;
   el.appendChild(div);
   el.scrollTop = el.scrollHeight;
@@ -614,6 +619,7 @@ socket.on('move-made', (data) => {
   if (data.move) {
     lastMove = { from: data.move.from, to: data.move.to };
     addMoveToHistory(data.move);
+    if (data.move.promotion) addSystemMessage(`${PLAYER_NAMES[data.move.player]} pawn promoted to ${data.move.promotion}!`);
   }
   selectedCell = null;
   validMoves = [];
@@ -721,9 +727,15 @@ function startReplay() {
 }
 
 function applyReplayMove(state, m) {
+  const piece = state.board[m.from_row][m.from_col];
   const captured = state.board[m.to_row][m.to_col];
-  state.board[m.to_row][m.to_col] = state.board[m.from_row][m.from_col];
+  state.board[m.to_row][m.to_col] = piece;
   state.board[m.from_row][m.from_col] = null;
+  // Handle pawn promotion in replay
+  if (piece && piece.type === 'pawn') {
+    const promotedType = replayCheckPromotion(state, m.to_row, m.to_col, piece.color);
+    if (promotedType) state.board[m.to_row][m.to_col] = { type: promotedType, color: piece.color };
+  }
   if (captured && captured.type === 'king') {
     state.eliminated.push(captured.color);
     for (let r = 0; r < 8; r++)
@@ -732,6 +744,27 @@ function applyReplayMove(state, m) {
           state.board[r][c] = null;
   }
   return { from: { row: m.from_row, col: m.from_col }, to: { row: m.to_row, col: m.to_col } };
+}
+
+// Mirror of engine pawn promotion logic for replay
+const PAWN_DIRS = { red: [-1,0], yellow: [0,-1], green: [1,0], black: [0,1] };
+function replayCheckPromotion(state, row, col, color) {
+  const dir = PAWN_DIRS[color];
+  if (!dir) return null;
+  let atFarEnd = false;
+  if (dir[0] === -1 && row === 0) atFarEnd = true;
+  if (dir[0] === 1 && row === 7) atFarEnd = true;
+  if (dir[1] === -1 && col === 0) atFarEnd = true;
+  if (dir[1] === 1 && col === 7) atFarEnd = true;
+  if (!atFarEnd) return null;
+  for (const type of ['elephant', 'horse', 'boat']) {
+    let found = false;
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 8; c++)
+        if (state.board[r][c]?.color === color && state.board[r][c]?.type === type) found = true;
+    if (!found) return type;
+  }
+  return null;
 }
 
 function replayStep(dir) {

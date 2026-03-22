@@ -184,6 +184,9 @@ io.on('connection', (socket) => {
 
     callback({ dice: result.dice, state: sanitizeState(result.state) });
     socket.to(gameId).emit('dice-rolled', { player: color, dice: result.dice, state: sanitizeState(result.state) });
+
+    // If turn was auto-skipped (no valid moves), trigger next player (may be bot)
+    scheduleBotMove(gameId, result.state);
   });
 
   // ---- GET VALID MOVES ----
@@ -229,6 +232,9 @@ io.on('connection', (socket) => {
 
     if (result.state.winner) {
       io.to(gameId).emit('game-over', { winner: result.state.winner });
+    } else {
+      // If turn advanced to a bot, trigger it
+      scheduleBotMove(gameId, result.state);
     }
   });
 
@@ -249,6 +255,9 @@ io.on('connection', (socket) => {
 
     callback({ state: sanitizeState(result.state) });
     socket.to(gameId).emit('turn-skipped', { player: color, state: sanitizeState(result.state) });
+
+    // Trigger next player if it's a bot
+    scheduleBotMove(gameId, result.state);
   });
 
   // ---- CHAT ----
