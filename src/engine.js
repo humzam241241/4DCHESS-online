@@ -16,11 +16,12 @@ const INITIAL_SETUP = {
     pawnDir: [-1, 0]
   },
   yellow: {
+    // West-moving army: back rank at col 7, pawns at col 6, king at bottom-right corner
     pieces: [
-      { type: 'boat', row: 7, col: 4 }, { type: 'horse', row: 7, col: 5 },
-      { type: 'elephant', row: 7, col: 6 }, { type: 'king', row: 7, col: 7 },
-      { type: 'pawn', row: 6, col: 4 }, { type: 'pawn', row: 6, col: 5 },
-      { type: 'pawn', row: 6, col: 6 }, { type: 'pawn', row: 6, col: 7 },
+      { type: 'king', row: 7, col: 7 }, { type: 'elephant', row: 6, col: 7 },
+      { type: 'horse', row: 5, col: 7 }, { type: 'boat', row: 4, col: 7 },
+      { type: 'pawn', row: 7, col: 6 }, { type: 'pawn', row: 6, col: 6 },
+      { type: 'pawn', row: 5, col: 6 }, { type: 'pawn', row: 4, col: 6 },
     ],
     pawnDir: [0, -1]
   },
@@ -34,11 +35,12 @@ const INITIAL_SETUP = {
     pawnDir: [1, 0]
   },
   black: {
+    // East-moving army: back rank at col 0, pawns at col 1, king at top-left corner
     pieces: [
-      { type: 'king', row: 0, col: 0 }, { type: 'elephant', row: 0, col: 1 },
-      { type: 'horse', row: 0, col: 2 }, { type: 'boat', row: 0, col: 3 },
-      { type: 'pawn', row: 1, col: 0 }, { type: 'pawn', row: 1, col: 1 },
-      { type: 'pawn', row: 1, col: 2 }, { type: 'pawn', row: 1, col: 3 },
+      { type: 'king', row: 0, col: 0 }, { type: 'elephant', row: 1, col: 0 },
+      { type: 'horse', row: 2, col: 0 }, { type: 'boat', row: 3, col: 0 },
+      { type: 'pawn', row: 0, col: 1 }, { type: 'pawn', row: 1, col: 1 },
+      { type: 'pawn', row: 2, col: 1 }, { type: 'pawn', row: 3, col: 1 },
     ],
     pawnDir: [0, 1]
   }

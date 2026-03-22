@@ -20,11 +20,12 @@ let replayMoves = [];
 
 const PLAYERS = ['red', 'yellow', 'green', 'black'];
 const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Black' };
-// ♚=King ♜=Elephant(rook-mover) ♞=Horse(knight-mover) ♝=Boat(diagonal-jumper) ♟=Pawn
+// ♚=King ♜=Elephant(rook-mover) ♞=Horse(knight-mover) ⛵=Boat(2-sq diagonal jumper) ♟=Pawn
 const PIECE_ICONS = {
   king: '\u265A', elephant: '\u265C', horse: '\u265E',
-  boat: '\u265D', pawn: '\u265F'
+  boat: '\u26F5', pawn: '\u265F'
 };
+const PIECE_ABBR = { king: 'K', elephant: 'El', horse: 'H', boat: 'Bt', pawn: 'P' };
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 
 // ==================== PWA & SERVICE WORKER ====================
@@ -341,12 +342,34 @@ function renderBoard() {
         cell.classList.add(gameState.board[r][c] ? 'capture-target' : 'move-target');
       }
 
+      // Rank label (col 0, left edge)
+      if (c === 0) {
+        const rl = document.createElement('span');
+        rl.className = 'coord-label rank-label';
+        rl.textContent = 8 - r;
+        cell.appendChild(rl);
+      }
+      // File label (row 7, bottom edge)
+      if (r === 7) {
+        const fl = document.createElement('span');
+        fl.className = 'coord-label file-label';
+        fl.textContent = 'abcdefgh'[c];
+        cell.appendChild(fl);
+      }
+
       const piece = gameState.board[r][c];
       if (piece) {
-        const span = document.createElement('span');
-        span.className = `piece-${piece.color}`;
-        span.textContent = PIECE_ICONS[piece.type];
-        cell.appendChild(span);
+        const wrap = document.createElement('span');
+        wrap.className = `piece-wrap piece-${piece.color}`;
+        const icon = document.createElement('span');
+        icon.className = 'piece-icon';
+        icon.textContent = PIECE_ICONS[piece.type];
+        const lbl = document.createElement('span');
+        lbl.className = 'piece-name';
+        lbl.textContent = PIECE_ABBR[piece.type];
+        wrap.appendChild(icon);
+        wrap.appendChild(lbl);
+        cell.appendChild(wrap);
       }
 
       frag.appendChild(cell);
@@ -394,16 +417,22 @@ function renderDice() {
 
   const isMyTurn = gameState.currentPlayer === myColor;
 
+  function dieFaceHTML(face) {
+    const icon = PIECE_ICONS[face] || '?';
+    const abbr = PIECE_ABBR[face] || face;
+    return `<span class="die-icon">${icon}</span><span class="die-label">${abbr}</span>`;
+  }
+
   if (!gameState.dice) {
-    die1.textContent = '-'; die2.textContent = '-';
+    die1.innerHTML = '<span class="die-icon">—</span>'; die2.innerHTML = '<span class="die-icon">—</span>';
     die1.className = 'die'; die2.className = 'die';
     rollBtn.disabled = !isMyTurn || !!gameState.winner;
     skipBtn.style.display = 'none';
   } else {
-    die1.textContent = gameState.dice[0];
-    die2.textContent = gameState.dice[1];
-    die1.className = 'die' + (gameState.diceUsed[0] ? ' used' : ' active');
-    die2.className = 'die' + (gameState.diceUsed[1] ? ' used' : ' active');
+    die1.innerHTML = dieFaceHTML(gameState.dice[0]);
+    die2.innerHTML = dieFaceHTML(gameState.dice[1]);
+    die1.className = 'die die-' + gameState.dice[0] + (gameState.diceUsed[0] ? ' used' : ' active');
+    die2.className = 'die die-' + gameState.dice[1] + (gameState.diceUsed[1] ? ' used' : ' active');
     rollBtn.disabled = true;
     skipBtn.style.display = isMyTurn && !gameState.winner ? 'block' : 'none';
   }
