@@ -5,7 +5,11 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const engine = require('./src/engine');
+const engine2v2 = require('./src/engine2v2');
 const db = require('./src/db');
+
+// Helper: pick engine by game type
+function getEngine(gameType) { return gameType === '2v2' ? engine2v2 : engine; }
 
 const app = express();
 const server = http.createServer(app);
@@ -86,27 +90,31 @@ io.on('connection', (socket) => {
   console.log(`[+] ${socket.id} connected`);
 
   // ---- CREATE GAME ----
-  socket.on('create-game', ({ playerName }, callback) => {
+  socket.on('create-game', ({ playerName, randomColor, gameType = 'classic' }, callback) => {
     const gameId = uuidv4();
     const code = generateRoomCode();
-    const color = 'red'; // Creator gets red (first to move)
+    const eng = getEngine(gameType);
+    // R&G: randomize color assignment; otherwise creator gets red
+    const color = randomColor
+      ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
+      : 'red';
 
-    db.createGameRecord(gameId, code);
+    db.createGameRecord(gameId, code, gameType);
     db.addPlayer(gameId, color, playerName, socket.id);
 
-    const state = engine.createGame();
+    const state = eng.createGame();
     activeGames.set(gameId, state);
     db.updateGameState(gameId, state);
 
     socket.join(gameId);
-    socket.data = { gameId, color, playerName };
+    socket.data = { gameId, color, playerName, gameType };
 
-    callback({ gameId, code, color, state: sanitizeState(state), players: db.getPlayers(gameId) });
-    console.log(`[Game] ${playerName} created game ${code} (${gameId})`);
+    callback({ gameId, code, color, gameType, state: sanitizeState(state), players: sortPlayers(db.getPlayers(gameId)) });
+    console.log(`[Game] ${playerName} created ${gameType} game ${code} (${gameId}) as ${color}`);
   });
 
   // ---- JOIN GAME ----
-  socket.on('join-game', ({ code, playerName }, callback) => {
+  socket.on('join-game', ({ code, playerName, randomColor }, callback) => {
     const game = db.getGameByCode(code.toUpperCase());
     if (!game) return callback({ error: 'Game not found' });
     if (game.status === 'finished') return callback({ error: 'Game is already finished' });
@@ -114,29 +122,35 @@ io.on('connection', (socket) => {
     const players = db.getPlayers(game.id);
     if (players.length >= 4) return callback({ error: 'Game is full' });
 
-    // Assign next available color
+    const gameType = game.game_type || 'classic';
+    const eng = getEngine(gameType);
+
+    // Assign random or next available color
     const taken = players.map(p => p.color);
-    const available = engine.PLAYERS.filter(c => !taken.includes(c));
-    const color = available[0];
+    const available = eng.PLAYERS.filter(c => !taken.includes(c));
+    const color = randomColor
+      ? available[Math.floor(Math.random() * available.length)]
+      : available[0];
 
     db.addPlayer(game.id, color, playerName, socket.id);
     socket.join(game.id);
-    socket.data = { gameId: game.id, color, playerName };
+    socket.data = { gameId: game.id, color, playerName, gameType };
 
     const allPlayers = db.getPlayers(game.id);
     let state = activeGames.get(game.id);
     if (!state) {
-      state = game.state ? JSON.parse(game.state) : engine.createGame();
+      state = game.state ? JSON.parse(game.state) : eng.createGame();
       activeGames.set(game.id, state);
     }
 
-    callback({ gameId: game.id, code: game.code, color, state: sanitizeState(state), players: allPlayers });
-    socket.to(game.id).emit('player-joined', { color, name: playerName, players: allPlayers });
+    const sorted = sortPlayers(allPlayers);
+    callback({ gameId: game.id, code: game.code, color, gameType, state: sanitizeState(state), players: sorted });
+    socket.to(game.id).emit('player-joined', { color, name: playerName, players: sorted });
 
     // Auto-start when 4 players join
     if (allPlayers.length === 4 && game.status === 'waiting') {
       db.setGameStarted(game.id);
-      io.to(game.id).emit('game-started', { state: sanitizeState(state), players: allPlayers });
+      io.to(game.id).emit('game-started', { state: sanitizeState(state), players: sorted });
       console.log(`[Game] ${game.code} started with 4 players`);
     }
 
@@ -148,9 +162,10 @@ io.on('connection', (socket) => {
     const game = db.getGame(gameId);
     if (!game) return callback({ error: 'Game not found' });
 
+    const gameType = game.game_type || 'classic';
     db.updatePlayerSocket(gameId, color, socket.id, true);
     socket.join(gameId);
-    socket.data = { gameId, color, playerName };
+    socket.data = { gameId, color, playerName, gameType };
 
     let state = activeGames.get(gameId);
     if (!state && game.state) {
@@ -158,25 +173,26 @@ io.on('connection', (socket) => {
       activeGames.set(gameId, state);
     }
 
-    const players = db.getPlayers(gameId);
+    const players = sortPlayers(db.getPlayers(gameId));
     const moves = db.getMoves(gameId);
     const chat = db.getChatMessages(gameId);
 
-    callback({ state: sanitizeState(state), players, moves, chat });
+    callback({ state: sanitizeState(state), players, moves, chat, gameType });
     socket.to(gameId).emit('player-reconnected', { color, name: playerName });
     console.log(`[Game] ${playerName} rejoined ${gameId}`);
   });
 
   // ---- ROLL DICE ----
   socket.on('roll-dice', (callback) => {
-    const { gameId, color } = socket.data || {};
+    const { gameId, color, gameType } = socket.data || {};
     if (!gameId) return callback({ error: 'Not in a game' });
 
     const state = activeGames.get(gameId);
     if (!state) return callback({ error: 'Game not found' });
     if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const result = engine.rollDice(state);
+    const eng = getEngine(gameType || state.gameType);
+    const result = eng.rollDice(state);
     if (result.error) return callback({ error: result.error });
 
     activeGames.set(gameId, result.state);
@@ -191,7 +207,7 @@ io.on('connection', (socket) => {
 
   // ---- GET VALID MOVES ----
   socket.on('get-moves', ({ row, col }, callback) => {
-    const { gameId, color } = socket.data || {};
+    const { gameId, color, gameType } = socket.data || {};
     if (!gameId) return callback({ error: 'Not in a game' });
 
     const state = activeGames.get(gameId);
@@ -200,23 +216,25 @@ io.on('connection', (socket) => {
     const piece = state.board[row][col];
     if (!piece || piece.color !== color) return callback({ moves: [] });
 
-    const availTypes = engine.getAvailablePieceTypes(state);
+    const eng = getEngine(gameType || state.gameType);
+    const availTypes = eng.getAvailablePieceTypes(state);
     if (!availTypes.includes(piece.type)) return callback({ moves: [] });
 
-    const moves = engine.getValidMoves(state.board, row, col);
+    const moves = eng.getValidMoves(state.board, row, col);
     callback({ moves });
   });
 
   // ---- MAKE MOVE ----
   socket.on('make-move', ({ fromRow, fromCol, toRow, toCol }, callback) => {
-    const { gameId, color } = socket.data || {};
+    const { gameId, color, gameType } = socket.data || {};
     if (!gameId) return callback({ error: 'Not in a game' });
 
     const state = activeGames.get(gameId);
     if (!state) return callback({ error: 'Game not found' });
     if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const result = engine.executeMove(state, fromRow, fromCol, toRow, toCol);
+    const eng = getEngine(gameType || state.gameType);
+    const result = eng.executeMove(state, fromRow, fromCol, toRow, toCol);
     if (result.error) return callback({ error: result.error });
 
     activeGames.set(gameId, result.state);
@@ -231,7 +249,7 @@ io.on('connection', (socket) => {
     socket.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
     if (result.state.winner) {
-      io.to(gameId).emit('game-over', { winner: result.state.winner });
+      io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
     } else {
       // If turn advanced to a bot, trigger it
       scheduleBotMove(gameId, result.state);
@@ -240,14 +258,15 @@ io.on('connection', (socket) => {
 
   // ---- SKIP TURN ----
   socket.on('skip-turn', (callback) => {
-    const { gameId, color } = socket.data || {};
+    const { gameId, color, gameType } = socket.data || {};
     if (!gameId) return callback({ error: 'Not in a game' });
 
     const state = activeGames.get(gameId);
     if (!state) return callback({ error: 'Game not found' });
     if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const result = engine.skipTurn(state);
+    const eng = getEngine(gameType || state.gameType);
+    const result = eng.skipTurn(state);
     if (result.error) return callback({ error: result.error });
 
     activeGames.set(gameId, result.state);
@@ -272,27 +291,28 @@ io.on('connection', (socket) => {
 
   // ---- START GAME (with bots or fewer players) ----
   socket.on('start-game', (callback) => {
-    const { gameId } = socket.data || {};
+    const { gameId, gameType } = socket.data || {};
     if (!gameId) return callback({ error: 'Not in a game' });
 
     const game = db.getGame(gameId);
     const players = db.getPlayers(gameId);
     if (players.length < 1) return callback({ error: 'Need at least 1 player' });
 
+    const eng = getEngine(gameType || game.game_type);
     let state = activeGames.get(gameId);
 
     // Fill remaining slots with AI markers
     const taken = players.map(p => p.color);
-    const bots = engine.PLAYERS.filter(c => !taken.includes(c));
+    const bots = eng.PLAYERS.filter(c => !taken.includes(c));
     for (const botColor of bots) {
-      db.addPlayer(gameId, botColor, `Bot (${engine.PLAYER_NAMES[botColor]})`, null);
+      db.addPlayer(gameId, botColor, `Bot (${eng.PLAYER_NAMES[botColor]})`, null);
     }
 
     db.setGameStarted(gameId);
-    const allPlayers = db.getPlayers(gameId);
+    const allPlayers = sortPlayers(db.getPlayers(gameId));
 
-    callback({ state: sanitizeState(state), players: allPlayers });
-    io.to(gameId).emit('game-started', { state: sanitizeState(state), players: allPlayers });
+    callback({ state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
+    io.to(gameId).emit('game-started', { state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
 
     // If current player is a bot, trigger bot move
     scheduleBotMove(gameId, state);
@@ -308,6 +328,14 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ==================== HELPERS ====================
+
+// Sort players in canonical turn order: red, yellow, green, black
+const COLOR_ORDER = ['red', 'yellow', 'green', 'black'];
+function sortPlayers(players) {
+  return [...players].sort((a, b) => COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color));
+}
 
 // ==================== SIMPLE BOT AI ====================
 
@@ -326,9 +354,12 @@ function scheduleBotMove(gameId, state) {
     if (!current || current.winner) return;
     if (!isBot(gameId, current.currentPlayer)) return;
 
+    const game = db.getGame(gameId);
+    const eng = getEngine(game?.game_type);
+
     // Roll dice
     if (current.phase === 'roll') {
-      const rollResult = engine.rollDice(current);
+      const rollResult = eng.rollDice(current);
       if (rollResult.error) return;
       current = rollResult.state;
       activeGames.set(gameId, current);
@@ -343,14 +374,14 @@ function scheduleBotMove(gameId, state) {
     }
 
     // Make moves
-    makeBotMoves(gameId, current);
+    makeBotMoves(gameId, current, eng);
   }, 800 + Math.random() * 700);
 }
 
-function makeBotMoves(gameId, state) {
+function makeBotMoves(gameId, state, eng = engine) {
   if (!state || state.phase !== 'move' || state.winner) return;
 
-  const types = engine.getAvailablePieceTypes(state);
+  const types = eng.getAvailablePieceTypes(state);
   let bestMove = null;
   let bestScore = -Infinity;
 
@@ -358,7 +389,7 @@ function makeBotMoves(gameId, state) {
     for (let c = 0; c < 8; c++) {
       const p = state.board[r][c];
       if (!p || p.color !== state.currentPlayer || !types.includes(p.type)) continue;
-      const moves = engine.getValidMoves(state.board, r, c);
+      const moves = eng.getValidMoves(state.board, r, c);
       for (const m of moves) {
         let score = Math.random() * 2;
         const target = state.board[m.row][m.col];
@@ -380,7 +411,7 @@ function makeBotMoves(gameId, state) {
 
   if (!bestMove) {
     // Skip
-    const skipResult = engine.skipTurn(state);
+    const skipResult = eng.skipTurn(state);
     if (!skipResult.error) {
       activeGames.set(gameId, skipResult.state);
       db.updateGameState(gameId, skipResult.state);
@@ -390,7 +421,7 @@ function makeBotMoves(gameId, state) {
     return;
   }
 
-  const result = engine.executeMove(state, bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
+  const result = eng.executeMove(state, bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
   if (result.error) return;
 
   activeGames.set(gameId, result.state);
@@ -401,13 +432,13 @@ function makeBotMoves(gameId, state) {
 
   if (result.state.winner) {
     db.setGameFinished(gameId, result.state.winner);
-    io.to(gameId).emit('game-over', { winner: result.state.winner });
+    io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
     return;
   }
 
   // If still this bot's turn (second die), continue
   if (result.state.phase === 'move' && isBot(gameId, result.state.currentPlayer)) {
-    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId)), 600);
+    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId), eng), 600);
   } else {
     scheduleBotMove(gameId, result.state);
   }

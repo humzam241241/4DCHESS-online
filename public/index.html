@@ -32,10 +32,38 @@
       <p class="subtitle">Four Kings Chess — Online Multiplayer</p>
     </div>
 
+    <!-- Session resume banner -->
+    <div id="session-banner" class="session-banner" style="display:none">
+      <div class="session-info">
+        Returning as <strong id="session-banner-name"></strong>
+        — Game <strong id="session-banner-code"></strong>
+        (<span id="session-banner-color"></span>)
+      </div>
+      <div class="session-actions">
+        <button id="btn-rejoin-session" class="btn btn-secondary btn-sm">Rejoin</button>
+        <button id="btn-new-session" class="btn btn-ghost btn-sm">Change Name</button>
+      </div>
+    </div>
+
     <div class="lobby-card">
-      <div class="input-group">
+      <!-- Game mode selector -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="classic">Classic</button>
+        <button class="mode-tab" data-mode="2v2">2v2 Teams</button>
+      </div>
+
+      <div class="input-group" style="margin-top:14px">
         <label for="player-name">Your Name</label>
         <input type="text" id="player-name" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+      </div>
+
+      <!-- R&G random color toggle -->
+      <div class="rg-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" id="random-color" checked>
+          <span class="toggle-track"></span>
+          <span>Random color (R&amp;G mode)</span>
+        </label>
       </div>
 
       <div class="lobby-actions">
@@ -121,11 +149,12 @@
       <div class="panel piece-legend">
         <h3>Pieces</h3>
         <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir, can be captured</div>
-        <div class="legend-row"><span class="leg-sym">♜</span> <b>Elephant (El)</b> — slides orthogonally like Rook</div>
+        <div class="legend-row"><span class="leg-sym">🐘</span> <b>Elephant (El)</b> — slides orthogonally like Rook</div>
         <div class="legend-row"><span class="leg-sym">♞</span> <b>Horse (H)</b> — L-shape jump like Knight</div>
         <div class="legend-row"><span class="leg-sym">⛵</span> <b>Boat (Bt)</b> — jumps exactly 2 diag, can't capture King</div>
         <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to dead piece</div>
-        <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Dice: King die = move King or Pawn. Missing piece = move Pawn instead.</div>
+        <div class="legend-row" id="queen-legend-row"><span class="leg-sym">👑</span> <b>Queen (Q)</b> — jumps exactly 2 sq any direction <i>(2v2)</i></div>
+        <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Dice: King die = King/Queen/Pawn. Missing piece = Pawn instead.</div>
       </div>
     </div>
 

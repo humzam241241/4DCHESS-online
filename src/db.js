@@ -70,13 +70,16 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_chat_game ON chat_messages(game_id);
   `);
 
+  // Migrations (safe: ignore if column already exists)
+  try { db.exec(`ALTER TABLE games ADD COLUMN game_type TEXT NOT NULL DEFAULT 'classic'`); } catch {}
+
   return db;
 }
 
 // ==================== GAMES ====================
 
-function createGameRecord(id, code) {
-  db.prepare('INSERT INTO games (id, code) VALUES (?, ?)').run(id, code);
+function createGameRecord(id, code, gameType = 'classic') {
+  db.prepare('INSERT INTO games (id, code, game_type) VALUES (?, ?, ?)').run(id, code, gameType);
 }
 
 function getGame(id) {

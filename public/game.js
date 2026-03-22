@@ -20,12 +20,15 @@ let replayMoves = [];
 
 const PLAYERS = ['red', 'yellow', 'green', 'black'];
 const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Black' };
-// ♚=King ♜=Elephant(rook-mover) ♞=Horse(knight-mover) ⛵=Boat(2-sq diagonal jumper) ♟=Pawn
+// ♚=King 🐘=Elephant(rook-mover) ♞=Horse(knight-mover) ⛵=Boat(2-sq diagonal jumper) ♟=Pawn 👑=Queen(2-sq any dir, 2v2)
 const PIECE_ICONS = {
-  king: '\u265A', elephant: '\u265C', horse: '\u265E',
-  boat: '\u26F5', pawn: '\u265F'
+  king: '\u265A', elephant: '\uD83D\uDC18', horse: '\u265E',
+  boat: '\u26F5', pawn: '\u265F', queen: '\uD83D\uDC51'
 };
-const PIECE_ABBR = { king: 'K', elephant: 'El', horse: 'H', boat: 'Bt', pawn: 'P' };
+const PIECE_ABBR = { king: 'K', elephant: 'El', horse: 'H', boat: 'Bt', pawn: 'P', queen: 'Q' };
+
+let gameType = 'classic'; // 'classic' | '2v2'
+let selectedMode = 'classic';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 
 // ==================== PWA & SERVICE WORKER ====================
@@ -158,28 +161,27 @@ function joinGameByCode(code) {
 }
 
 // ==================== CREATE/JOIN ====================
+function getRandomColorPref() { return document.getElementById('random-color')?.checked ?? true; }
+
 document.getElementById('btn-play-bots').addEventListener('click', () => {
   const name = document.getElementById('player-name').value.trim();
   if (!name) return showToast('Please enter your name');
   myName = name;
   haptic('light');
+  localStorage.setItem('chaturaji_name', name);
 
-  socket.emit('create-game', { playerName: name }, (res) => {
+  socket.emit('create-game', { playerName: name, randomColor: getRandomColorPref(), gameType: selectedMode }, (res) => {
     if (res.error) return showToast(res.error);
-    gameId = res.gameId;
-    roomCode = res.code;
-    myColor = res.color;
-    gameState = res.state;
-    players = res.players;
+    gameId = res.gameId; roomCode = res.code; myColor = res.color;
+    gameState = res.state; players = res.players;
+    if (res.gameType) gameType = res.gameType;
     saveSession();
 
-    // Immediately start with bots
     socket.emit('start-game', (startRes) => {
       if (startRes.error) return showToast(startRes.error);
-      players = startRes.players;
-      gameState = startRes.state;
-      enterGame();
-      haptic('success');
+      players = startRes.players; gameState = startRes.state;
+      if (startRes.gameType) gameType = startRes.gameType;
+      enterGame(); haptic('success');
     });
   });
 }, { passive: true });
@@ -189,14 +191,13 @@ document.getElementById('btn-create').addEventListener('click', () => {
   if (!name) return showToast('Please enter your name');
   myName = name;
   haptic('light');
+  localStorage.setItem('chaturaji_name', name);
 
-  socket.emit('create-game', { playerName: name }, (res) => {
+  socket.emit('create-game', { playerName: name, randomColor: getRandomColorPref(), gameType: selectedMode }, (res) => {
     if (res.error) return showToast(res.error);
-    gameId = res.gameId;
-    roomCode = res.code;
-    myColor = res.color;
-    gameState = res.state;
-    players = res.players;
+    gameId = res.gameId; roomCode = res.code; myColor = res.color;
+    gameState = res.state; players = res.players;
+    if (res.gameType) gameType = res.gameType;
     saveSession();
     showWaitingRoom();
     haptic('success');
@@ -211,13 +212,11 @@ document.getElementById('btn-join').addEventListener('click', () => {
   myName = name;
   haptic('light');
 
-  socket.emit('join-game', { code, playerName: name }, (res) => {
+  socket.emit('join-game', { code, playerName: name, randomColor: getRandomColorPref() }, (res) => {
     if (res.error) return showToast(res.error);
-    gameId = res.gameId;
-    roomCode = res.code;
-    myColor = res.color;
-    gameState = res.state;
-    players = res.players;
+    gameId = res.gameId; roomCode = res.code; myColor = res.color;
+    gameState = res.state; players = res.players;
+    if (res.gameType) gameType = res.gameType;
     saveSession();
 
     if (players.length >= 4 || gameState.phase !== 'roll' || gameState.turnNumber > 1) {
@@ -438,16 +437,21 @@ function renderDice() {
   }
 }
 
+const TEAM_COLORS = { red: 'A', yellow: 'B', green: 'A', black: 'B' }; // 2v2 teams
 function renderPlayers() {
   const el = document.getElementById('game-players');
-  el.innerHTML = players.map(p => {
+  const sorted = [...players].sort((a, b) => PLAYERS.indexOf(a.color) - PLAYERS.indexOf(b.color));
+  el.innerHTML = sorted.map(p => {
     const isElim = gameState.eliminated.includes(p.color);
     const isCurrent = gameState.currentPlayer === p.color && !gameState.winner;
     const count = countPieces(p.color);
+    const teamBadge = gameType === '2v2'
+      ? `<span class="team-badge team-${TEAM_COLORS[p.color]}">${TEAM_COLORS[p.color]}</span>` : '';
     return `
       <div class="player-row ${isElim ? 'eliminated' : ''} ${isCurrent ? 'current' : ''}">
         <span class="dot" style="background:${PLAYER_COLORS[p.color]}"></span>
         <span class="name">${escapeHtml(p.name)}</span>
+        ${teamBadge}
         ${p.color === myColor ? '<span class="you-badge">YOU</span>' : ''}
         ${!p.connected && p.socket_id !== null ? '<span class="disconnected">DC</span>' : ''}
         <span class="pieces">${count}</span>
@@ -626,14 +630,6 @@ socket.on('player-disconnected', (data) => {
   addSystemMessage(`${data.name} disconnected`);
 });
 
-socket.on('game-started', (data) => {
-  gameState = data.state;
-  players = data.players;
-  enterGame();
-  addSystemMessage('Game started!');
-  haptic('success');
-});
-
 socket.on('dice-rolled', (data) => {
   gameState = data.state;
   selectedCell = null;
@@ -666,12 +662,25 @@ socket.on('turn-skipped', (data) => {
 
 socket.on('chat-message', addChatMessage);
 
+socket.on('game-started', (data) => {
+  gameState = data.state; players = data.players;
+  if (data.gameType) gameType = data.gameType;
+  enterGame();
+  addSystemMessage('Game started!');
+  haptic('success');
+});
+
 socket.on('game-over', (data) => {
   const overlay = document.getElementById('game-over-overlay');
   const text = document.getElementById('winner-text');
   const stats = document.getElementById('winner-stats');
-  text.textContent = `${PLAYER_NAMES[data.winner]} Wins!`;
-  text.className = `turn-${data.winner}`;
+  // Handle 2v2 team win
+  const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black' };
+  const winnerLabel = data.winnerTeam
+    ? `${teamNames[data.winnerTeam] || data.winnerTeam} Win!`
+    : `${PLAYER_NAMES[data.winner] || data.winner} Wins!`;
+  text.textContent = winnerLabel;
+  text.className = data.winnerTeam ? '' : `turn-${data.winner}`;
   stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
   overlay.classList.add('show');
   renderGame();
@@ -716,10 +725,10 @@ function buildInitialState() {
       { type: 'horse', row: 7, col: 2 }, { type: 'boat', row: 7, col: 3 },
     ],
     yellow: [
-      { type: 'boat', row: 7, col: 4 }, { type: 'horse', row: 7, col: 5 },
-      { type: 'elephant', row: 7, col: 6 }, { type: 'king', row: 7, col: 7 },
-      { type: 'pawn', row: 6, col: 4 }, { type: 'pawn', row: 6, col: 5 },
-      { type: 'pawn', row: 6, col: 6 }, { type: 'pawn', row: 6, col: 7 },
+      { type: 'king', row: 7, col: 7 }, { type: 'elephant', row: 6, col: 7 },
+      { type: 'horse', row: 5, col: 7 }, { type: 'boat', row: 4, col: 7 },
+      { type: 'pawn', row: 7, col: 6 }, { type: 'pawn', row: 6, col: 6 },
+      { type: 'pawn', row: 5, col: 6 }, { type: 'pawn', row: 4, col: 6 },
     ],
     green: [
       { type: 'boat', row: 0, col: 4 }, { type: 'horse', row: 0, col: 5 },
@@ -728,10 +737,10 @@ function buildInitialState() {
       { type: 'pawn', row: 1, col: 6 }, { type: 'pawn', row: 1, col: 7 },
     ],
     black: [
-      { type: 'king', row: 0, col: 0 }, { type: 'elephant', row: 0, col: 1 },
-      { type: 'horse', row: 0, col: 2 }, { type: 'boat', row: 0, col: 3 },
-      { type: 'pawn', row: 1, col: 0 }, { type: 'pawn', row: 1, col: 1 },
-      { type: 'pawn', row: 1, col: 2 }, { type: 'pawn', row: 1, col: 3 },
+      { type: 'king', row: 0, col: 0 }, { type: 'elephant', row: 1, col: 0 },
+      { type: 'horse', row: 2, col: 0 }, { type: 'boat', row: 3, col: 0 },
+      { type: 'pawn', row: 0, col: 1 }, { type: 'pawn', row: 1, col: 1 },
+      { type: 'pawn', row: 2, col: 1 }, { type: 'pawn', row: 3, col: 1 },
     ]
   };
   for (const color of PLAYERS) {
@@ -876,40 +885,40 @@ function debounce(fn, ms) {
 
 // ==================== RECONNECTION ====================
 socket.on('connect', () => {
-  const session = loadSession();
-  if (session) {
-    socket.emit('rejoin-game', session, (res) => {
-      if (res.error) { clearSession(); return; }
-      gameId = session.gameId;
-      myColor = session.myColor;
-      myName = session.myName;
-      roomCode = session.roomCode;
-      gameState = res.state;
-      players = res.players;
-
-      // Restore move history
-      if (res.moves) {
-        moveHistory = [];
-        document.getElementById('move-history').innerHTML = '';
-        for (const m of res.moves) {
-          addMoveToHistory({
-            turn: m.turn_number, player: m.player_color, piece: m.piece_type,
-            from: { row: m.from_row, col: m.from_col, notation: `${String.fromCharCode(97+m.from_col)}${8-m.from_row}` },
-            to: { row: m.to_row, col: m.to_col, notation: `${String.fromCharCode(97+m.to_col)}${8-m.to_row}` },
-            captured: m.captured_type ? { type: m.captured_type, color: m.captured_color } : null,
-            dice: [m.dice_1, m.dice_2]
-          });
-        }
-      }
-      // Restore chat
-      if (res.chat) {
-        for (const c of res.chat) addChatMessage({ color: c.player_color, name: c.player_name, message: c.message });
-      }
-
-      enterGame();
-    });
+  // Only auto-rejoin if we're already in an active game (lost connection mid-game)
+  // On initial page load gameId is null, so we don't auto-redirect to game screen
+  if (gameId && myColor) {
+    const session = loadSession();
+    if (session && session.gameId === gameId) {
+      socket.emit('rejoin-game', session, (res) => {
+        if (res.error) { clearSession(); return; }
+        gameState = res.state;
+        players = res.players;
+        if (res.gameType) gameType = res.gameType;
+        renderGame();
+      });
+    }
   }
 });
+
+function restoreSessionHistory(res) {
+  if (res.moves) {
+    moveHistory = [];
+    document.getElementById('move-history').innerHTML = '';
+    for (const m of res.moves) {
+      addMoveToHistory({
+        turn: m.turn_number, player: m.player_color, piece: m.piece_type,
+        from: { row: m.from_row, col: m.from_col, notation: `${String.fromCharCode(97+m.from_col)}${8-m.from_row}` },
+        to: { row: m.to_row, col: m.to_col, notation: `${String.fromCharCode(97+m.to_col)}${8-m.to_row}` },
+        captured: m.captured_type ? { type: m.captured_type, color: m.captured_color } : null,
+        dice: [m.dice_1, m.dice_2]
+      });
+    }
+  }
+  if (res.chat) {
+    for (const c of res.chat) addChatMessage({ color: c.player_color, name: c.player_name, message: c.message });
+  }
+}
 
 // ==================== PREVENT ZOOM GESTURES ON BOARD ====================
 document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -948,6 +957,60 @@ const savedName = localStorage.getItem('chaturaji_name');
 if (savedName) document.getElementById('player-name').value = savedName;
 document.getElementById('player-name').addEventListener('change', (e) => {
   localStorage.setItem('chaturaji_name', e.target.value.trim());
+});
+
+// ---- SESSION BANNER ----
+(function initSessionBanner() {
+  const session = loadSession();
+  const banner = document.getElementById('session-banner');
+  if (!banner) return;
+  if (session && session.gameId) {
+    document.getElementById('session-banner-name').textContent = session.myName;
+    document.getElementById('session-banner-code').textContent = session.roomCode || '';
+    document.getElementById('session-banner-color').textContent = session.myColor || '';
+    banner.style.display = 'flex';
+  }
+  document.getElementById('btn-rejoin-session')?.addEventListener('click', () => {
+    const s = loadSession();
+    if (!s) return;
+    myName = s.myName;
+    socket.emit('rejoin-game', s, (res) => {
+      if (res.error) {
+        showToast('Game no longer available. Starting fresh.');
+        clearSession();
+        banner.style.display = 'none';
+        return;
+      }
+      gameId = s.gameId; myColor = s.myColor; myName = s.myName; roomCode = s.roomCode;
+      gameState = res.state; players = res.players;
+      if (res.gameType) gameType = res.gameType;
+      restoreSessionHistory(res);
+      enterGame();
+    });
+  }, { passive: true });
+  document.getElementById('btn-new-session')?.addEventListener('click', () => {
+    clearSession();
+    banner.style.display = 'none';
+    document.getElementById('player-name').value = '';
+    document.getElementById('player-name').focus();
+  }, { passive: true });
+})();
+
+// ---- MODE TABS ----
+function updateModeUI(mode) {
+  const sub = document.querySelector('.subtitle');
+  const qRow = document.getElementById('queen-legend-row');
+  if (sub) sub.textContent = mode === '2v2' ? '2v2 Team Battle — With Queens' : 'Four Kings Chess — Online Multiplayer';
+  if (qRow) qRow.style.display = mode === '2v2' ? '' : 'none';
+}
+updateModeUI('classic');
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    selectedMode = tab.dataset.mode;
+    updateModeUI(selectedMode);
+  }, { passive: true });
 });
 
 // Enter key on inputs
