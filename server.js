@@ -4,12 +4,18 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const Stripe = require('stripe');
 const engine = require('./src/engine');
 const engine2v2 = require('./src/engine2v2');
 const db = require('./src/db');
+const supabase = require('./src/supabase');
 
-// Helper: pick engine by game type
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
 function getEngine(gameType) { return gameType === '2v2' ? engine2v2 : engine; }
+function isPremium(profile) {
+  return profile?.has_lifetime_access === true || profile?.subscription_status === 'active';
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -22,187 +28,338 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// Initialize DB
-db.init();
+// ==================== STRIPE WEBHOOK (raw body — must come before express.json) ====================
+app.post('/api/stripe-webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error('[Stripe] Webhook signature error:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
 
-// Serve static files
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object;
+          const userId = session.metadata?.user_id;
+          if (!userId) break;
+          if (session.mode === 'payment') {
+            await db.updateProfile(userId, { has_lifetime_access: true });
+            console.log(`[Stripe] Lifetime access granted to ${userId}`);
+          }
+          break;
+        }
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated': {
+          const sub = event.data.object;
+          const { data: profile } = await supabase
+            .from('profiles').select('id').eq('stripe_customer_id', sub.customer).maybeSingle();
+          if (profile) {
+            await db.updateProfile(profile.id, {
+              subscription_status: sub.status === 'active' ? 'active' : 'cancelled',
+              stripe_subscription_id: sub.id
+            });
+          }
+          break;
+        }
+        case 'customer.subscription.deleted': {
+          const sub = event.data.object;
+          const { data: profile } = await supabase
+            .from('profiles').select('id').eq('stripe_customer_id', sub.customer).maybeSingle();
+          if (profile) {
+            await db.updateProfile(profile.id, {
+              subscription_status: 'cancelled',
+              stripe_subscription_id: null
+            });
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('[Stripe] Webhook handler error:', err);
+    }
+
+    res.json({ received: true });
+  }
+);
+
+// ==================== MIDDLEWARE ====================
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// In-memory active game states (keyed by game ID)
+// Auth middleware for protected routes
+async function requireAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required' });
+  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
+  if (error || !user) return res.status(401).json({ error: 'Invalid or expired token' });
+  req.user = user;
+  next();
+}
+
+// In-memory active game states
 const activeGames = new Map();
 
 // ==================== REST API ====================
 
-// List open games
-app.get('/api/games', (req, res) => {
-  const games = db.getOpenGames();
-  res.json(games);
+app.get('/api/games', async (req, res) => {
+  try { res.json(await db.getOpenGames()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get game details
-app.get('/api/games/:id', (req, res) => {
-  const game = db.getGame(req.params.id);
-  if (!game) return res.status(404).json({ error: 'Game not found' });
-  const players = db.getPlayers(game.id);
-  const moves = db.getMoves(game.id);
-  res.json({ game, players, moves });
+app.get('/api/games/:id', async (req, res) => {
+  try {
+    const game = await db.getGame(req.params.id);
+    if (!game) return res.status(404).json({ error: 'Game not found' });
+    const [players, moves] = await Promise.all([db.getPlayers(game.id), db.getMoves(game.id)]);
+    res.json({ game, players, moves });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get game by code
-app.get('/api/games/code/:code', (req, res) => {
-  const game = db.getGameByCode(req.params.code.toUpperCase());
-  if (!game) return res.status(404).json({ error: 'Game not found' });
-  const players = db.getPlayers(game.id);
-  res.json({ game, players });
+app.get('/api/games/code/:code', async (req, res) => {
+  try {
+    const game = await db.getGameByCode(req.params.code.toUpperCase());
+    if (!game) return res.status(404).json({ error: 'Game not found' });
+    const players = await db.getPlayers(game.id);
+    res.json({ game, players });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get move history for replay
-app.get('/api/games/:id/moves', (req, res) => {
-  const moves = db.getMoves(req.params.id);
-  res.json(moves);
+app.get('/api/games/:id/moves', async (req, res) => {
+  try { res.json(await db.getMoves(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Player stats
-app.get('/api/stats/:name', (req, res) => {
-  const stats = db.getPlayerStats(req.params.name);
-  res.json(stats);
+app.get('/api/stats/:name', async (req, res) => {
+  try { res.json(await db.getPlayerStats(req.params.name)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Recent finished games
-app.get('/api/recent', (req, res) => {
-  const games = db.getRecentGames(20);
-  res.json(games);
+app.get('/api/recent', async (req, res) => {
+  try { res.json(await db.getRecentGames(20)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Public config for frontend (only safe public keys)
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY
+  });
+});
+
+// ---- Auth-protected routes ----
+
+app.get('/api/my-profile', requireAuth, async (req, res) => {
+  try {
+    const profile = await db.getOrCreateProfile(
+      req.user.id,
+      req.user.email,
+      req.user.user_metadata?.full_name,
+      req.user.user_metadata?.avatar_url
+    );
+    res.json(profile);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/leaderboard', requireAuth, async (req, res) => {
+  try {
+    const profile = await db.getProfile(req.user.id);
+    if (!isPremium(profile)) return res.status(403).json({ error: 'Premium required' });
+    res.json(await db.getLeaderboard());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/create-checkout', requireAuth, async (req, res) => {
+  try {
+    const { type } = req.body; // 'lifetime' | 'monthly'
+    if (!['lifetime', 'monthly'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+
+    let profile = await db.getOrCreateProfile(req.user.id, req.user.email);
+    let customerId = profile?.stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: req.user.email,
+        metadata: { user_id: req.user.id }
+      });
+      customerId = customer.id;
+      await db.updateProfile(req.user.id, { stripe_customer_id: customerId });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      mode: type === 'lifetime' ? 'payment' : 'subscription',
+      line_items: [{
+        price: type === 'lifetime'
+          ? process.env.STRIPE_LIFETIME_PRICE_ID
+          : process.env.STRIPE_MONTHLY_PRICE_ID,
+        quantity: 1
+      }],
+      success_url: `${frontendUrl}?payment=success`,
+      cancel_url: `${frontendUrl}?payment=cancelled`,
+      metadata: { user_id: req.user.id, type }
+    });
+
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error('[Stripe] Checkout error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ==================== SOCKET.IO AUTH MIDDLEWARE ====================
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('Authentication required'));
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return next(new Error('Invalid or expired token'));
+  socket.data.userId = user.id;
+  socket.data.userEmail = user.email;
+  next();
 });
 
 // ==================== SOCKET.IO ====================
 
-function generateRoomCode() {
+async function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  // Ensure unique
-  if (db.getGameByCode(code)) return generateRoomCode();
+  if (await db.getGameByCode(code)) return generateRoomCode();
   return code;
 }
 
 io.on('connection', (socket) => {
-  console.log(`[+] ${socket.id} connected`);
+  console.log(`[+] ${socket.id} connected (user: ${socket.data.userId})`);
 
   // ---- CREATE GAME ----
-  socket.on('create-game', ({ playerName, randomColor, gameType = 'classic' }, callback) => {
-    const gameId = uuidv4();
-    const code = generateRoomCode();
-    const eng = getEngine(gameType);
-    // R&G: randomize color assignment; otherwise creator gets red
-    const color = randomColor
-      ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
-      : 'red';
+  socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic' }, callback) => {
+    try {
+      // Premium check for 2v2
+      if (gameType === '2v2') {
+        const profile = await db.getProfile(socket.data.userId);
+        if (!isPremium(profile)) return callback({ error: 'Premium required for 2v2 games' });
+      }
 
-    db.createGameRecord(gameId, code, gameType);
-    db.addPlayer(gameId, color, playerName, socket.id);
+      const gameId = uuidv4();
+      const code = await generateRoomCode();
+      const eng = getEngine(gameType);
+      const color = randomColor
+        ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
+        : 'red';
 
-    const state = eng.createGame();
-    activeGames.set(gameId, state);
-    db.updateGameState(gameId, state);
+      await db.createGameRecord(gameId, code, gameType);
+      await db.addPlayer(gameId, color, playerName, socket.id, socket.data.userId);
 
-    socket.join(gameId);
-    socket.data = { gameId, color, playerName, gameType };
+      const state = eng.createGame();
+      activeGames.set(gameId, state);
+      await db.updateGameState(gameId, state);
 
-    callback({ gameId, code, color, gameType, state: sanitizeState(state), players: sortPlayers(db.getPlayers(gameId)) });
-    console.log(`[Game] ${playerName} created ${gameType} game ${code} (${gameId}) as ${color}`);
+      socket.join(gameId);
+      socket.data = { ...socket.data, gameId, color, playerName, gameType };
+
+      callback({ gameId, code, color, gameType, state: sanitizeState(state), players: sortPlayers(await db.getPlayers(gameId)) });
+      console.log(`[Game] ${playerName} created ${gameType} game ${code} (${gameId}) as ${color}`);
+    } catch (e) { console.error('[create-game]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- JOIN GAME ----
-  socket.on('join-game', ({ code, playerName, randomColor }, callback) => {
-    const game = db.getGameByCode(code.toUpperCase());
-    if (!game) return callback({ error: 'Game not found' });
-    if (game.status === 'finished') return callback({ error: 'Game is already finished' });
+  socket.on('join-game', async ({ code, playerName, randomColor }, callback) => {
+    try {
+      const game = await db.getGameByCode(code.toUpperCase());
+      if (!game) return callback({ error: 'Game not found' });
+      if (game.status === 'finished') return callback({ error: 'Game is already finished' });
 
-    const players = db.getPlayers(game.id);
-    if (players.length >= 4) return callback({ error: 'Game is full' });
+      const players = await db.getPlayers(game.id);
+      if (players.length >= 4) return callback({ error: 'Game is full' });
 
-    const gameType = game.game_type || 'classic';
-    const eng = getEngine(gameType);
+      const gameType = game.game_type || 'classic';
+      const eng = getEngine(gameType);
 
-    // Assign random or next available color
-    const taken = players.map(p => p.color);
-    const available = eng.PLAYERS.filter(c => !taken.includes(c));
-    const color = randomColor
-      ? available[Math.floor(Math.random() * available.length)]
-      : available[0];
+      const taken = players.map(p => p.color);
+      const available = eng.PLAYERS.filter(c => !taken.includes(c));
+      const color = randomColor
+        ? available[Math.floor(Math.random() * available.length)]
+        : available[0];
 
-    db.addPlayer(game.id, color, playerName, socket.id);
-    socket.join(game.id);
-    socket.data = { gameId: game.id, color, playerName, gameType };
+      await db.addPlayer(game.id, color, playerName, socket.id, socket.data.userId);
+      socket.join(game.id);
+      socket.data = { ...socket.data, gameId: game.id, color, playerName, gameType };
 
-    const allPlayers = db.getPlayers(game.id);
-    let state = activeGames.get(game.id);
-    if (!state) {
-      state = game.state ? JSON.parse(game.state) : eng.createGame();
-      activeGames.set(game.id, state);
-    }
+      const allPlayers = await db.getPlayers(game.id);
+      let state = activeGames.get(game.id);
+      if (!state) {
+        state = game.state || eng.createGame();
+        activeGames.set(game.id, state);
+      }
 
-    const sorted = sortPlayers(allPlayers);
-    callback({ gameId: game.id, code: game.code, color, gameType, state: sanitizeState(state), players: sorted });
-    socket.to(game.id).emit('player-joined', { color, name: playerName, players: sorted });
+      const sorted = sortPlayers(allPlayers);
+      callback({ gameId: game.id, code: game.code, color, gameType, state: sanitizeState(state), players: sorted });
+      socket.to(game.id).emit('player-joined', { color, name: playerName, players: sorted });
 
-    // Auto-start when 4 players join
-    if (allPlayers.length === 4 && game.status === 'waiting') {
-      db.setGameStarted(game.id);
-      io.to(game.id).emit('game-started', { state: sanitizeState(state), players: sorted });
-      console.log(`[Game] ${game.code} started with 4 players`);
-    }
+      if (allPlayers.length === 4 && game.status === 'waiting') {
+        await db.setGameStarted(game.id);
+        io.to(game.id).emit('game-started', { state: sanitizeState(state), players: sorted });
+        console.log(`[Game] ${game.code} started with 4 players`);
+      }
 
-    console.log(`[Game] ${playerName} joined ${game.code} as ${color}`);
+      console.log(`[Game] ${playerName} joined ${game.code} as ${color}`);
+    } catch (e) { console.error('[join-game]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- REJOIN GAME ----
-  socket.on('rejoin-game', ({ gameId, color, playerName }, callback) => {
-    const game = db.getGame(gameId);
-    if (!game) return callback({ error: 'Game not found' });
+  socket.on('rejoin-game', async ({ gameId, color, playerName }, callback) => {
+    try {
+      const game = await db.getGame(gameId);
+      if (!game) return callback({ error: 'Game not found' });
 
-    const gameType = game.game_type || 'classic';
-    db.updatePlayerSocket(gameId, color, socket.id, true);
-    socket.join(gameId);
-    socket.data = { gameId, color, playerName, gameType };
+      const gameType = game.game_type || 'classic';
+      await db.updatePlayerSocket(gameId, color, socket.id, true);
+      socket.join(gameId);
+      socket.data = { ...socket.data, gameId, color, playerName, gameType };
 
-    let state = activeGames.get(gameId);
-    if (!state && game.state) {
-      state = JSON.parse(game.state);
-      activeGames.set(gameId, state);
-    }
+      let state = activeGames.get(gameId);
+      if (!state && game.state) {
+        state = game.state; // already an object (JSONB)
+        activeGames.set(gameId, state);
+      }
 
-    const players = sortPlayers(db.getPlayers(gameId));
-    const moves = db.getMoves(gameId);
-    const chat = db.getChatMessages(gameId);
+      const [players, moves, chat] = await Promise.all([
+        db.getPlayers(gameId),
+        db.getMoves(gameId),
+        db.getChatMessages(gameId)
+      ]);
 
-    callback({ state: sanitizeState(state), players, moves, chat, gameType });
-    socket.to(gameId).emit('player-reconnected', { color, name: playerName });
-    console.log(`[Game] ${playerName} rejoined ${gameId}`);
+      callback({ state: sanitizeState(state), players: sortPlayers(players), moves, chat, gameType });
+      socket.to(gameId).emit('player-reconnected', { color, name: playerName });
+      console.log(`[Game] ${playerName} rejoined ${gameId}`);
+    } catch (e) { console.error('[rejoin-game]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- ROLL DICE ----
-  socket.on('roll-dice', (callback) => {
-    const { gameId, color, gameType } = socket.data || {};
-    if (!gameId) return callback({ error: 'Not in a game' });
+  socket.on('roll-dice', async (callback) => {
+    try {
+      const { gameId, color, gameType } = socket.data || {};
+      if (!gameId) return callback({ error: 'Not in a game' });
 
-    const state = activeGames.get(gameId);
-    if (!state) return callback({ error: 'Game not found' });
-    if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      const state = activeGames.get(gameId);
+      if (!state) return callback({ error: 'Game not found' });
+      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const eng = getEngine(gameType || state.gameType);
-    const result = eng.rollDice(state);
-    if (result.error) return callback({ error: result.error });
+      const eng = getEngine(gameType || state.gameType);
+      const result = eng.rollDice(state);
+      if (result.error) return callback({ error: result.error });
 
-    activeGames.set(gameId, result.state);
-    db.updateGameState(gameId, result.state);
+      activeGames.set(gameId, result.state);
+      await db.updateGameState(gameId, result.state);
 
-    callback({ dice: result.dice, state: sanitizeState(result.state) });
-    socket.to(gameId).emit('dice-rolled', { player: color, dice: result.dice, state: sanitizeState(result.state) });
+      callback({ dice: result.dice, state: sanitizeState(result.state) });
+      socket.to(gameId).emit('dice-rolled', { player: color, dice: result.dice, state: sanitizeState(result.state) });
 
-    // If turn was auto-skipped (no valid moves), trigger next player (may be bot)
-    scheduleBotMove(gameId, result.state);
+      scheduleBotMove(gameId, result.state);
+    } catch (e) { console.error('[roll-dice]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- GET VALID MOVES ----
@@ -220,109 +377,111 @@ io.on('connection', (socket) => {
     const availTypes = eng.getAvailablePieceTypes(state);
     if (!availTypes.includes(piece.type)) return callback({ moves: [] });
 
-    const moves = eng.getValidMoves(state.board, row, col);
-    callback({ moves });
+    callback({ moves: eng.getValidMoves(state.board, row, col) });
   });
 
   // ---- MAKE MOVE ----
-  socket.on('make-move', ({ fromRow, fromCol, toRow, toCol }, callback) => {
-    const { gameId, color, gameType } = socket.data || {};
-    if (!gameId) return callback({ error: 'Not in a game' });
+  socket.on('make-move', async ({ fromRow, fromCol, toRow, toCol }, callback) => {
+    try {
+      const { gameId, color, gameType } = socket.data || {};
+      if (!gameId) return callback({ error: 'Not in a game' });
 
-    const state = activeGames.get(gameId);
-    if (!state) return callback({ error: 'Game not found' });
-    if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      const state = activeGames.get(gameId);
+      if (!state) return callback({ error: 'Game not found' });
+      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const eng = getEngine(gameType || state.gameType);
-    const result = eng.executeMove(state, fromRow, fromCol, toRow, toCol);
-    if (result.error) return callback({ error: result.error });
+      const eng = getEngine(gameType || state.gameType);
+      const result = eng.executeMove(state, fromRow, fromCol, toRow, toCol);
+      if (result.error) return callback({ error: result.error });
 
-    activeGames.set(gameId, result.state);
-    db.updateGameState(gameId, result.state);
-    db.recordMove(gameId, result.move);
+      activeGames.set(gameId, result.state);
+      await db.updateGameState(gameId, result.state);
+      await db.recordMove(gameId, result.move);
 
-    if (result.state.winner) {
-      db.setGameFinished(gameId, result.state.winner);
-    }
+      if (result.state.winner) await db.setGameFinished(gameId, result.state.winner);
 
-    callback({ state: sanitizeState(result.state), move: result.move });
-    socket.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
+      callback({ state: sanitizeState(result.state), move: result.move });
+      socket.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
-    if (result.state.winner) {
-      io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
-    } else {
-      // If turn advanced to a bot, trigger it
-      scheduleBotMove(gameId, result.state);
-    }
+      if (result.state.winner) {
+        io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
+      } else {
+        scheduleBotMove(gameId, result.state);
+      }
+    } catch (e) { console.error('[make-move]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- SKIP TURN ----
-  socket.on('skip-turn', (callback) => {
-    const { gameId, color, gameType } = socket.data || {};
-    if (!gameId) return callback({ error: 'Not in a game' });
+  socket.on('skip-turn', async (callback) => {
+    try {
+      const { gameId, color, gameType } = socket.data || {};
+      if (!gameId) return callback({ error: 'Not in a game' });
 
-    const state = activeGames.get(gameId);
-    if (!state) return callback({ error: 'Game not found' });
-    if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      const state = activeGames.get(gameId);
+      if (!state) return callback({ error: 'Game not found' });
+      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
 
-    const eng = getEngine(gameType || state.gameType);
-    const result = eng.skipTurn(state);
-    if (result.error) return callback({ error: result.error });
+      const eng = getEngine(gameType || state.gameType);
+      const result = eng.skipTurn(state);
+      if (result.error) return callback({ error: result.error });
 
-    activeGames.set(gameId, result.state);
-    db.updateGameState(gameId, result.state);
+      activeGames.set(gameId, result.state);
+      await db.updateGameState(gameId, result.state);
 
-    callback({ state: sanitizeState(result.state) });
-    socket.to(gameId).emit('turn-skipped', { player: color, state: sanitizeState(result.state) });
+      callback({ state: sanitizeState(result.state) });
+      socket.to(gameId).emit('turn-skipped', { player: color, state: sanitizeState(result.state) });
 
-    // Trigger next player if it's a bot
-    scheduleBotMove(gameId, result.state);
+      scheduleBotMove(gameId, result.state);
+    } catch (e) { console.error('[skip-turn]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- CHAT ----
-  socket.on('chat-message', ({ message }) => {
+  socket.on('chat-message', async ({ message }) => {
     const { gameId, color, playerName } = socket.data || {};
     if (!gameId || !message || message.length > 500) return;
-
     const sanitized = message.trim().slice(0, 500);
-    db.addChatMessage(gameId, color, playerName, sanitized);
+    await db.addChatMessage(gameId, color, playerName, sanitized).catch(() => {});
     io.to(gameId).emit('chat-message', { color, name: playerName, message: sanitized, timestamp: Date.now() });
   });
 
-  // ---- START GAME (with bots or fewer players) ----
-  socket.on('start-game', (callback) => {
-    const { gameId, gameType } = socket.data || {};
-    if (!gameId) return callback({ error: 'Not in a game' });
+  // ---- START GAME (with bots) ----
+  socket.on('start-game', async (callback) => {
+    try {
+      const { gameId, gameType } = socket.data || {};
+      if (!gameId) return callback({ error: 'Not in a game' });
 
-    const game = db.getGame(gameId);
-    const players = db.getPlayers(gameId);
-    if (players.length < 1) return callback({ error: 'Need at least 1 player' });
+      // Premium check for bots
+      const profile = await db.getProfile(socket.data.userId);
+      if (!isPremium(profile)) return callback({ error: 'Premium required for bot games' });
 
-    const eng = getEngine(gameType || game.game_type);
-    let state = activeGames.get(gameId);
+      const game = await db.getGame(gameId);
+      const players = await db.getPlayers(gameId);
+      if (players.length < 1) return callback({ error: 'Need at least 1 player' });
 
-    // Fill remaining slots with AI markers
-    const taken = players.map(p => p.color);
-    const bots = eng.PLAYERS.filter(c => !taken.includes(c));
-    for (const botColor of bots) {
-      db.addPlayer(gameId, botColor, `Bot (${eng.PLAYER_NAMES[botColor]})`, null);
-    }
+      const eng = getEngine(gameType || game.game_type);
+      const state = activeGames.get(gameId);
 
-    db.setGameStarted(gameId);
-    const allPlayers = sortPlayers(db.getPlayers(gameId));
+      const taken = players.map(p => p.color);
+      const bots = eng.PLAYERS.filter(c => !taken.includes(c));
+      for (const botColor of bots) {
+        await db.addPlayer(gameId, botColor, `Bot (${eng.PLAYER_NAMES[botColor]})`, null, null);
+      }
 
-    callback({ state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
-    io.to(gameId).emit('game-started', { state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
+      await db.setGameStarted(gameId);
+      const allPlayers = sortPlayers(await db.getPlayers(gameId));
 
-    // If current player is a bot, trigger bot move
-    scheduleBotMove(gameId, state);
+      callback({ state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
+      io.to(gameId).emit('game-started', { state: sanitizeState(state), players: allPlayers, gameType: game.game_type });
+
+      scheduleBotMove(gameId, state);
+    } catch (e) { console.error('[start-game]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- DISCONNECT ----
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const { gameId, color, playerName } = socket.data || {};
     if (gameId && color) {
-      db.updatePlayerSocket(gameId, color, null, false);
+      await db.updatePlayerSocket(gameId, color, null, false).catch(() => {});
       socket.to(gameId).emit('player-disconnected', { color, name: playerName });
       console.log(`[-] ${playerName} (${color}) disconnected from ${gameId}`);
     }
@@ -331,7 +490,6 @@ io.on('connection', (socket) => {
 
 // ==================== HELPERS ====================
 
-// Sort players in canonical turn order: red, yellow, green, black
 const COLOR_ORDER = ['red', 'yellow', 'green', 'black'];
 function sortPlayers(players) {
   return [...players].sort((a, b) => COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color));
@@ -339,51 +497,43 @@ function sortPlayers(players) {
 
 // ==================== SIMPLE BOT AI ====================
 
-function isBot(gameId, color) {
-  const players = db.getPlayers(gameId);
+async function isBot(gameId, color) {
+  const players = await db.getPlayers(gameId);
   const player = players.find(p => p.color === color);
   return player && !player.socket_id && player.name.startsWith('Bot');
 }
 
 function scheduleBotMove(gameId, state) {
   if (!state || state.winner) return;
-  if (!isBot(gameId, state.currentPlayer)) return;
+  setTimeout(async () => {
+    try {
+      let current = activeGames.get(gameId);
+      if (!current || current.winner) return;
+      if (!await isBot(gameId, current.currentPlayer)) return;
 
-  setTimeout(() => {
-    let current = activeGames.get(gameId);
-    if (!current || current.winner) return;
-    if (!isBot(gameId, current.currentPlayer)) return;
+      const game = await db.getGame(gameId);
+      const eng = getEngine(game?.game_type);
 
-    const game = db.getGame(gameId);
-    const eng = getEngine(game?.game_type);
-
-    // Roll dice
-    if (current.phase === 'roll') {
-      const rollResult = eng.rollDice(current);
-      if (rollResult.error) return;
-      current = rollResult.state;
-      activeGames.set(gameId, current);
-      db.updateGameState(gameId, current);
-      io.to(gameId).emit('dice-rolled', { player: current.currentPlayer, dice: rollResult.dice, state: sanitizeState(current) });
-
-      // If auto-skipped (no moves), recurse
       if (current.phase === 'roll') {
-        scheduleBotMove(gameId, current);
-        return;
+        const rollResult = eng.rollDice(current);
+        if (rollResult.error) return;
+        current = rollResult.state;
+        activeGames.set(gameId, current);
+        await db.updateGameState(gameId, current);
+        io.to(gameId).emit('dice-rolled', { player: current.currentPlayer, dice: rollResult.dice, state: sanitizeState(current) });
+        if (current.phase === 'roll') { scheduleBotMove(gameId, current); return; }
       }
-    }
 
-    // Make moves
-    makeBotMoves(gameId, current, eng);
+      await makeBotMoves(gameId, current, eng);
+    } catch (e) { console.error('[bot]', e); }
   }, 800 + Math.random() * 700);
 }
 
-function makeBotMoves(gameId, state, eng = engine) {
+async function makeBotMoves(gameId, state, eng = engine) {
   if (!state || state.phase !== 'move' || state.winner) return;
 
   const types = eng.getAvailablePieceTypes(state);
-  let bestMove = null;
-  let bestScore = -Infinity;
+  let bestMove = null, bestScore = -Infinity;
 
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -399,22 +549,17 @@ function makeBotMoves(gameId, state, eng = engine) {
           if (target.type === 'elephant') score += 8;
           if (target.type === 'horse') score += 6;
         }
-        // Prefer moving toward center
         score += (3.5 - Math.abs(m.row - 3.5)) + (3.5 - Math.abs(m.col - 3.5));
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = { fromRow: r, fromCol: c, toRow: m.row, toCol: m.col };
-        }
+        if (score > bestScore) { bestScore = score; bestMove = { fromRow: r, fromCol: c, toRow: m.row, toCol: m.col }; }
       }
     }
   }
 
   if (!bestMove) {
-    // Skip
     const skipResult = eng.skipTurn(state);
     if (!skipResult.error) {
       activeGames.set(gameId, skipResult.state);
-      db.updateGameState(gameId, skipResult.state);
+      await db.updateGameState(gameId, skipResult.state);
       io.to(gameId).emit('turn-skipped', { player: state.currentPlayer, state: sanitizeState(skipResult.state) });
       scheduleBotMove(gameId, skipResult.state);
     }
@@ -425,26 +570,23 @@ function makeBotMoves(gameId, state, eng = engine) {
   if (result.error) return;
 
   activeGames.set(gameId, result.state);
-  db.updateGameState(gameId, result.state);
-  db.recordMove(gameId, result.move);
-
+  await db.updateGameState(gameId, result.state);
+  await db.recordMove(gameId, result.move);
   io.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
   if (result.state.winner) {
-    db.setGameFinished(gameId, result.state.winner);
+    await db.setGameFinished(gameId, result.state.winner);
     io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
     return;
   }
 
-  // If still this bot's turn (second die), continue
-  if (result.state.phase === 'move' && isBot(gameId, result.state.currentPlayer)) {
-    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId), eng), 600);
+  if (result.state.phase === 'move' && await isBot(gameId, result.state.currentPlayer)) {
+    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId), eng).catch(() => {}), 600);
   } else {
     scheduleBotMove(gameId, result.state);
   }
 }
 
-// Strip moveHistory from state sent to clients (too large)
 function sanitizeState(state) {
   if (!state) return null;
   const { moveHistory, ...rest } = state;
@@ -452,7 +594,6 @@ function sanitizeState(state) {
 }
 
 // ==================== START ====================
-
 server.listen(PORT, () => {
   console.log(`\n  Chaturaji server running on http://localhost:${PORT}\n`);
 });

@@ -1,7 +1,11 @@
 // ==================== CHATURAJI CLIENT ====================
 // Mobile-first, cross-platform (iOS/Android PWA)
 
-const socket = io(window.BACKEND_URL || '', { reconnection: true, reconnectionDelay: 1000, reconnectionAttempts: 20 });
+const socket = io(window.BACKEND_URL || '', {
+  reconnection: true, reconnectionDelay: 1000, reconnectionAttempts: 20,
+  auth: { token: window.__jwt || '' }
+});
+window.socket = socket;
 
 // ==================== STATE ====================
 let myColor = null;
@@ -164,6 +168,7 @@ function joinGameByCode(code) {
 function getRandomColorPref() { return document.getElementById('random-color')?.checked ?? true; }
 
 document.getElementById('btn-play-bots').addEventListener('click', () => {
+  if (!window.isPremium?.()) return window.showPaymentWall?.();
   const name = document.getElementById('player-name').value.trim();
   if (!name) return showToast('Please enter your name');
   myName = name;
@@ -1006,9 +1011,11 @@ function updateModeUI(mode) {
 updateModeUI('classic');
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.addEventListener('click', () => {
+    const mode = tab.dataset.mode;
+    if (mode === '2v2' && !window.isPremium?.()) { window.showPaymentWall?.(); return; }
     document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    selectedMode = tab.dataset.mode;
+    selectedMode = mode;
     updateModeUI(selectedMode);
   }, { passive: true });
 });
@@ -1023,3 +1030,11 @@ document.getElementById('player-name').addEventListener('keydown', (e) => {
 
 refreshOpenGames();
 refreshRecentGames();
+
+// Populate user bar with Google display name
+(function initUserBar() {
+  const nameEl = document.getElementById('user-display-name');
+  if (nameEl && window.currentProfile?.display_name) {
+    nameEl.textContent = window.currentProfile.display_name;
+  }
+})();

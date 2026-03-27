@@ -1,202 +1,248 @@
-// ==================== DATABASE LAYER ====================
-// SQLite persistence for games, moves, players, and chat.
+// ==================== DATABASE LAYER (Supabase PostgreSQL) ====================
+// All functions are async. State is stored as JSONB — no JSON.stringify/parse needed.
 
-const Database = require('better-sqlite3');
-const path = require('path');
-
-const DB_PATH = path.join(__dirname, '..', 'chaturaji.db');
-let db;
-
-function init() {
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS games (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      status TEXT NOT NULL DEFAULT 'waiting',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      started_at TEXT,
-      finished_at TEXT,
-      winner TEXT,
-      state TEXT,
-      turn_number INTEGER DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS players (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-      color TEXT NOT NULL,
-      name TEXT NOT NULL,
-      socket_id TEXT,
-      connected INTEGER DEFAULT 1,
-      joined_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(game_id, color)
-    );
-
-    CREATE TABLE IF NOT EXISTS moves (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-      turn_number INTEGER NOT NULL,
-      player_color TEXT NOT NULL,
-      piece_type TEXT NOT NULL,
-      from_row INTEGER NOT NULL,
-      from_col INTEGER NOT NULL,
-      to_row INTEGER NOT NULL,
-      to_col INTEGER NOT NULL,
-      captured_type TEXT,
-      captured_color TEXT,
-      dice_1 TEXT NOT NULL,
-      dice_2 TEXT NOT NULL,
-      notation TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-      player_color TEXT,
-      player_name TEXT NOT NULL,
-      message TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_games_code ON games(code);
-    CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
-    CREATE INDEX IF NOT EXISTS idx_players_game ON players(game_id);
-    CREATE INDEX IF NOT EXISTS idx_moves_game ON moves(game_id);
-    CREATE INDEX IF NOT EXISTS idx_chat_game ON chat_messages(game_id);
-  `);
-
-  // Migrations (safe: ignore if column already exists)
-  try { db.exec(`ALTER TABLE games ADD COLUMN game_type TEXT NOT NULL DEFAULT 'classic'`); } catch {}
-
-  return db;
-}
+const supabase = require('./supabase');
 
 // ==================== GAMES ====================
 
-function createGameRecord(id, code, gameType = 'classic') {
-  db.prepare('INSERT INTO games (id, code, game_type) VALUES (?, ?, ?)').run(id, code, gameType);
+async function createGameRecord(id, code, gameType = 'classic') {
+  const { error } = await supabase.from('games').insert({ id, code, game_type: gameType });
+  if (error) throw error;
 }
 
-function getGame(id) {
-  return db.prepare('SELECT * FROM games WHERE id = ?').get(id);
+async function getGame(id) {
+  const { data, error } = await supabase.from('games').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
-function getGameByCode(code) {
-  return db.prepare('SELECT * FROM games WHERE code = ?').get(code);
+async function getGameByCode(code) {
+  const { data, error } = await supabase.from('games').select('*').eq('code', code).maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
-function updateGameState(id, state, status) {
-  db.prepare(
-    'UPDATE games SET state = ?, status = ?, turn_number = ?, winner = ? WHERE id = ?'
-  ).run(JSON.stringify(state), status || state.phase === 'finished' ? 'finished' : 'playing', state.turnNumber, state.winner, id);
+async function updateGameState(id, state) {
+  const status = state.winner ? 'finished' : 'playing';
+  const { error } = await supabase.from('games').update({
+    state,
+    status,
+    turn_number: state.turnNumber || 1,
+    winner: state.winner || null
+  }).eq('id', id);
+  if (error) throw error;
 }
 
-function setGameStarted(id) {
-  db.prepare("UPDATE games SET status = 'playing', started_at = datetime('now') WHERE id = ?").run(id);
+async function setGameStarted(id) {
+  const { error } = await supabase.from('games').update({
+    status: 'playing',
+    started_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) throw error;
 }
 
-function setGameFinished(id, winner) {
-  db.prepare("UPDATE games SET status = 'finished', finished_at = datetime('now'), winner = ? WHERE id = ?").run(winner, id);
+async function setGameFinished(id, winner) {
+  const { error } = await supabase.from('games').update({
+    status: 'finished',
+    finished_at: new Date().toISOString(),
+    winner
+  }).eq('id', id);
+  if (error) throw error;
 }
 
-function getRecentGames(limit = 20) {
-  return db.prepare(
-    'SELECT g.*, COUNT(p.id) as player_count FROM games g LEFT JOIN players p ON g.id = p.game_id GROUP BY g.id ORDER BY g.created_at DESC LIMIT ?'
-  ).all(limit);
+async function getOpenGames() {
+  const { data: games, error } = await supabase
+    .from('games')
+    .select('*')
+    .eq('status', 'waiting')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  if (!games || !games.length) return [];
+
+  const { data: playerRows } = await supabase
+    .from('players')
+    .select('game_id')
+    .in('game_id', games.map(g => g.id));
+
+  const counts = {};
+  (playerRows || []).forEach(p => { counts[p.game_id] = (counts[p.game_id] || 0) + 1; });
+  return games.map(g => ({ ...g, player_count: counts[g.id] || 0 }));
 }
 
-function getOpenGames() {
-  return db.prepare(
-    "SELECT g.*, COUNT(p.id) as player_count FROM games g LEFT JOIN players p ON g.id = p.game_id WHERE g.status = 'waiting' GROUP BY g.id ORDER BY g.created_at DESC"
-  ).all();
+async function getRecentGames(limit = 20) {
+  const { data: games, error } = await supabase
+    .from('games')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  if (!games || !games.length) return [];
+
+  const { data: playerRows } = await supabase
+    .from('players')
+    .select('game_id')
+    .in('game_id', games.map(g => g.id));
+
+  const counts = {};
+  (playerRows || []).forEach(p => { counts[p.game_id] = (counts[p.game_id] || 0) + 1; });
+  return games.map(g => ({ ...g, player_count: counts[g.id] || 0 }));
 }
 
 // ==================== PLAYERS ====================
 
-function addPlayer(gameId, color, name, socketId) {
-  db.prepare(
-    'INSERT INTO players (game_id, color, name, socket_id) VALUES (?, ?, ?, ?)'
-  ).run(gameId, color, name, socketId);
+async function addPlayer(gameId, color, name, socketId, userId = null) {
+  const { error } = await supabase.from('players').insert({
+    game_id: gameId, color, name, socket_id: socketId, user_id: userId
+  });
+  if (error) throw error;
 }
 
-function getPlayers(gameId) {
-  return db.prepare('SELECT * FROM players WHERE game_id = ? ORDER BY color').all(gameId);
+async function getPlayers(gameId) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*')
+    .eq('game_id', gameId)
+    .order('color');
+  if (error) throw error;
+  return data || [];
 }
 
-function updatePlayerSocket(gameId, color, socketId, connected) {
-  db.prepare(
-    'UPDATE players SET socket_id = ?, connected = ? WHERE game_id = ? AND color = ?'
-  ).run(socketId, connected ? 1 : 0, gameId, color);
+async function updatePlayerSocket(gameId, color, socketId, connected) {
+  const { error } = await supabase.from('players').update({
+    socket_id: socketId, connected
+  }).eq('game_id', gameId).eq('color', color);
+  if (error) throw error;
 }
 
-function getPlayerBySocket(socketId) {
-  return db.prepare('SELECT * FROM players WHERE socket_id = ?').get(socketId);
+async function getPlayerBySocket(socketId) {
+  const { data, error } = await supabase.from('players').select('*').eq('socket_id', socketId).maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
-function removePlayer(gameId, color) {
-  db.prepare('DELETE FROM players WHERE game_id = ? AND color = ?').run(gameId, color);
+async function removePlayer(gameId, color) {
+  const { error } = await supabase.from('players').delete().eq('game_id', gameId).eq('color', color);
+  if (error) throw error;
 }
 
 // ==================== MOVES ====================
 
-function recordMove(gameId, move) {
-  db.prepare(`
-    INSERT INTO moves (game_id, turn_number, player_color, piece_type, from_row, from_col, to_row, to_col, captured_type, captured_color, dice_1, dice_2, notation)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    gameId, move.turn, move.player, move.piece,
-    move.from.row, move.from.col, move.to.row, move.to.col,
-    move.captured?.type || null, move.captured?.color || null,
-    move.dice[0], move.dice[1],
-    `${move.piece} ${move.from.notation}-${move.to.notation}`
-  );
+async function recordMove(gameId, move) {
+  const { error } = await supabase.from('moves').insert({
+    game_id: gameId,
+    turn_number: move.turn,
+    player_color: move.player,
+    piece_type: move.piece,
+    from_row: move.from.row,
+    from_col: move.from.col,
+    to_row: move.to.row,
+    to_col: move.to.col,
+    captured_type: move.captured?.type || null,
+    captured_color: move.captured?.color || null,
+    dice_1: move.dice[0],
+    dice_2: move.dice[1],
+    notation: `${move.piece} ${move.from.notation}-${move.to.notation}`
+  });
+  if (error) throw error;
 }
 
-function getMoves(gameId) {
-  return db.prepare('SELECT * FROM moves WHERE game_id = ? ORDER BY id ASC').all(gameId);
+async function getMoves(gameId) {
+  const { data, error } = await supabase
+    .from('moves')
+    .select('*')
+    .eq('game_id', gameId)
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data || [];
 }
 
 // ==================== CHAT ====================
 
-function addChatMessage(gameId, playerColor, playerName, message) {
-  db.prepare(
-    'INSERT INTO chat_messages (game_id, player_color, player_name, message) VALUES (?, ?, ?, ?)'
-  ).run(gameId, playerColor, playerName, message);
+async function addChatMessage(gameId, playerColor, playerName, message) {
+  const { error } = await supabase.from('chat_messages').insert({
+    game_id: gameId, player_color: playerColor, player_name: playerName, message
+  });
+  if (error) throw error;
 }
 
-function getChatMessages(gameId, limit = 100) {
-  return db.prepare(
-    'SELECT * FROM chat_messages WHERE game_id = ? ORDER BY id DESC LIMIT ?'
-  ).all(gameId, limit).reverse();
+async function getChatMessages(gameId, limit = 100) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('game_id', gameId)
+    .order('id', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).reverse();
 }
 
 // ==================== STATS ====================
 
-function getPlayerStats(name) {
-  const games = db.prepare(`
-    SELECT p.color, g.winner, g.status
-    FROM players p JOIN games g ON p.game_id = g.id
-    WHERE p.name = ? AND g.status = 'finished'
-  `).all(name);
+async function getPlayerStats(name) {
+  const { data: playerRows, error: pErr } = await supabase
+    .from('players')
+    .select('color, game_id')
+    .eq('name', name);
+  if (pErr) throw pErr;
+  if (!playerRows || !playerRows.length) return { totalGames: 0, wins: 0, losses: 0 };
 
+  const { data: gameRows, error: gErr } = await supabase
+    .from('games')
+    .select('id, winner')
+    .in('id', playerRows.map(p => p.game_id))
+    .eq('status', 'finished');
+  if (gErr) throw gErr;
+
+  const gameMap = {};
+  (gameRows || []).forEach(g => { gameMap[g.id] = g; });
+  const finished = playerRows.filter(p => gameMap[p.game_id]);
   return {
-    totalGames: games.length,
-    wins: games.filter(g => g.winner === g.color).length,
-    losses: games.filter(g => g.winner && g.winner !== g.color).length,
+    totalGames: finished.length,
+    wins: finished.filter(p => gameMap[p.game_id]?.winner === p.color).length,
+    losses: finished.filter(p => gameMap[p.game_id]?.winner && gameMap[p.game_id]?.winner !== p.color).length
   };
 }
 
+// ==================== PROFILES ====================
+
+async function getProfile(userId) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function updateProfile(userId, updates) {
+  const { error } = await supabase.from('profiles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+async function getOrCreateProfile(userId, email, displayName, avatarUrl) {
+  let profile = await getProfile(userId);
+  if (!profile) {
+    await supabase.from('profiles').insert({
+      id: userId,
+      display_name: displayName || email,
+      avatar_url: avatarUrl || null
+    });
+    profile = await getProfile(userId);
+  }
+  return profile;
+}
+
+async function getLeaderboard() {
+  const { data, error } = await supabase.rpc('get_leaderboard');
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
-  init,
   createGameRecord, getGame, getGameByCode, updateGameState,
   setGameStarted, setGameFinished, getRecentGames, getOpenGames,
   addPlayer, getPlayers, updatePlayerSocket, getPlayerBySocket, removePlayer,
   recordMove, getMoves,
   addChatMessage, getChatMessages,
   getPlayerStats,
+  getProfile, updateProfile, getOrCreateProfile, getLeaderboard,
 };

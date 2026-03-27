@@ -17,19 +17,111 @@
 
 <!-- Favicon -->
 <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
-
-<!-- Prevent phone number detection -->
 <meta name="format-detection" content="telephone=no">
 
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+
+<!-- ==================== SIGN-IN SCREEN ==================== -->
+<div id="signin-screen" class="auth-fullscreen" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <h1>Chaturaji</h1>
+      <p>Four Kings Chess — Online Multiplayer</p>
+    </div>
+    <div class="auth-body">
+      <h2>Sign in to play</h2>
+      <p class="auth-sub">Free classic games. Premium features unlocked with one payment.</p>
+      <button id="btn-google-signin" class="btn-google">
+        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+      <div class="auth-features">
+        <div class="auth-feature-row">
+          <span class="auth-feature-icon">♟</span>
+          <span><strong>Free:</strong> Classic 4-player multiplayer</span>
+        </div>
+        <div class="auth-feature-row premium-row">
+          <span class="auth-feature-icon">⭐</span>
+          <span><strong>$5 one-time:</strong> Bots, 2v2, ranked & leaderboards</span>
+        </div>
+        <div class="auth-feature-row premium-row">
+          <span class="auth-feature-icon">👑</span>
+          <span><strong>Monthly sub:</strong> Extra premium features</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAYMENT WALL OVERLAY ==================== -->
+<div id="payment-wall" class="overlay" style="display:none">
+  <div class="overlay-content payment-content">
+    <button id="btn-close-payment" class="btn-close-overlay">✕</button>
+    <h2>Unlock Premium</h2>
+    <p class="payment-sub">Bots, 2v2, ranked games &amp; leaderboards</p>
+
+    <div class="payment-options">
+      <div class="payment-option">
+        <div class="payment-badge">Best value</div>
+        <h3>One-Time</h3>
+        <div class="payment-price">$5 <span>forever</span></div>
+        <ul class="payment-features">
+          <li>Play vs Bots</li>
+          <li>2v2 Team mode</li>
+          <li>Ranked matchmaking</li>
+          <li>Leaderboards</li>
+        </ul>
+        <button id="btn-pay-lifetime" class="btn btn-primary btn-lg">Get Premium — $5</button>
+      </div>
+
+      <div class="payment-option">
+        <h3>Monthly</h3>
+        <div class="payment-price">$3 <span>/mo</span></div>
+        <ul class="payment-features">
+          <li>Everything in One-Time</li>
+          <li>Priority matchmaking</li>
+          <li>Custom profile badge</li>
+          <li>Early access features</li>
+        </ul>
+        <button id="btn-pay-monthly" class="btn btn-secondary btn-lg">Subscribe Monthly</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LEADERBOARD OVERLAY ==================== -->
+<div id="leaderboard-overlay" class="overlay" style="display:none">
+  <div class="overlay-content leaderboard-content">
+    <button id="btn-close-leaderboard" class="btn-close-overlay">✕</button>
+    <h2>Leaderboard</h2>
+    <table class="leaderboard-table">
+      <thead>
+        <tr><th>#</th><th>Player</th><th>Wins</th><th>Win Rate</th></tr>
+      </thead>
+      <tbody id="leaderboard-body">
+        <tr><td colspan="4" style="text-align:center;padding:20px">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ==================== LOBBY SCREEN ==================== -->
 <div id="lobby-screen" class="screen active">
   <div class="lobby-container">
     <div class="logo">
       <h1>Chaturaji</h1>
       <p class="subtitle">Four Kings Chess — Online Multiplayer</p>
+    </div>
+
+    <!-- User bar -->
+    <div class="user-bar" id="user-bar">
+      <span id="user-display-name" class="user-name"></span>
+      <div class="user-actions">
+        <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
+        <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
+      </div>
     </div>
 
     <!-- Session resume banner -->
@@ -49,7 +141,7 @@
       <!-- Game mode selector -->
       <div class="mode-tabs">
         <button class="mode-tab active" data-mode="classic">Classic</button>
-        <button class="mode-tab" data-mode="2v2">2v2 Teams</button>
+        <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
       </div>
 
       <div class="input-group" style="margin-top:14px">
@@ -68,7 +160,7 @@
 
       <div class="lobby-actions">
         <button id="btn-play-bots" class="btn btn-primary btn-lg">
-          Play vs Bots
+          Play vs Bots ⭐
         </button>
         <button id="btn-create" class="btn btn-secondary btn-lg">
           <span class="btn-icon">+</span> Create Multiplayer Game
@@ -110,7 +202,7 @@
     <div id="waiting-players" class="waiting-players"></div>
     <p class="muted">Share the room code with friends. Game starts when 4 players join.</p>
     <div class="waiting-actions">
-      <button id="btn-start-bots" class="btn btn-secondary">Fill with Bots & Start</button>
+      <button id="btn-start-bots" class="btn btn-secondary">Fill with Bots &amp; Start ⭐</button>
       <button id="btn-leave" class="btn btn-ghost">Leave</button>
     </div>
   </div>
@@ -211,12 +303,15 @@
 </div>
 
 <script>
-  // Backend URL - change this to your Render URL after deploying
   window.BACKEND_URL = window.location.hostname === 'localhost'
-    ? ''  // local dev: same origin
+    ? ''
     : 'https://chaturaji-server.onrender.com';
 </script>
+<!-- Supabase JS (must load before auth.js) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Auth (loads game.js dynamically after sign-in) -->
+<script src="/auth.js"></script>
+<!-- Socket.IO (needed by game.js) -->
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-<script src="/game.js"></script>
 </body>
 </html>
