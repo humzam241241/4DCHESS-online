@@ -126,7 +126,7 @@ function loadSession() {
 
 // ==================== LOBBY ====================
 function refreshOpenGames() {
-  fetch('/api/games').then(r => r.json()).then(games => {
+  fetch(`${window.BACKEND_URL}/api/games`).then(r => r.json()).then(games => {
     const el = document.getElementById('open-games-list');
     if (!games.length) { el.innerHTML = '<p class="muted">No open games</p>'; return; }
     el.innerHTML = games.map(g => `
@@ -143,7 +143,7 @@ function refreshOpenGames() {
 }
 
 function refreshRecentGames() {
-  fetch('/api/recent').then(r => r.json()).then(games => {
+  fetch(`${window.BACKEND_URL}/api/recent`).then(r => r.json()).then(games => {
     const el = document.getElementById('recent-games-list');
     const finished = games.filter(g => g.status === 'finished');
     if (!finished.length) { el.innerHTML = '<p class="muted">No completed games yet</p>'; return; }
