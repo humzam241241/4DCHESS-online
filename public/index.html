@@ -113,86 +113,121 @@
 <!-- ==================== LOBBY SCREEN ==================== -->
 <div id="lobby-screen" class="screen active">
   <div class="lobby-container">
-    <div class="logo">
-      <h1>Chaturaji</h1>
-      <p class="subtitle">Four Kings Chess — Online Multiplayer</p>
-    </div>
 
-    <!-- User bar -->
-    <div class="user-bar" id="user-bar">
-      <span id="user-display-name" class="user-name"></span>
-      <div class="user-actions">
-        <button id="btn-history" class="btn btn-ghost btn-sm">History &amp; Rules</button>
-        <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
-        <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">⚙ Admin</button>
-        <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
+    <!-- Top bar: logo + nav -->
+    <div class="lobby-topbar">
+      <div class="logo">
+        <h1>Chaturaji</h1>
+        <p class="subtitle">Four Kings Chess — Online Multiplayer</p>
       </div>
-    </div>
-
-    <!-- Session resume banner -->
-    <div id="session-banner" class="session-banner" style="display:none">
-      <div class="session-info">
-        Returning as <strong id="session-banner-name"></strong>
-        — Game <strong id="session-banner-code"></strong>
-        (<span id="session-banner-color"></span>)
-      </div>
-      <div class="session-actions">
-        <button id="btn-rejoin-session" class="btn btn-secondary btn-sm">Rejoin</button>
-        <button id="btn-new-session" class="btn btn-ghost btn-sm">Change Name</button>
-      </div>
-    </div>
-
-    <div class="lobby-card">
-      <!-- Game mode selector -->
-      <div class="mode-tabs">
-        <button class="mode-tab active" data-mode="classic">Classic</button>
-        <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
-        <button class="mode-tab premium-tab" data-mode="aow">4-King Chess ⭐</button>
-      </div>
-
-      <div class="input-group" style="margin-top:14px">
-        <label for="player-name">Your Name</label>
-        <input type="text" id="player-name" placeholder="Enter your name..." maxlength="20" autocomplete="off">
-      </div>
-
-      <!-- R&G random color toggle -->
-      <div class="rg-toggle">
-        <label class="toggle-label">
-          <input type="checkbox" id="random-color" checked>
-          <span class="toggle-track"></span>
-          <span>Random color (R&amp;G mode)</span>
-        </label>
-      </div>
-
-      <div class="lobby-actions">
-        <button id="btn-play-bots" class="btn btn-primary btn-lg">
-          Play vs Bots ⭐
-        </button>
-        <button id="btn-create" class="btn btn-secondary btn-lg">
-          <span class="btn-icon">+</span> Create Multiplayer Game
-        </button>
-        <div class="divider"><span>or</span></div>
-        <div class="join-row">
-          <input type="text" id="join-code" placeholder="Room code" maxlength="6" autocomplete="off" style="text-transform:uppercase">
-          <button id="btn-join" class="btn btn-secondary">Join</button>
+      <div class="user-bar" id="user-bar">
+        <span id="user-display-name" class="user-name"></span>
+        <div class="user-actions">
+          <button id="btn-history" class="btn btn-ghost btn-sm">History &amp; Rules</button>
+          <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
+          <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">⚙ Admin</button>
+          <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </div>
     </div>
 
-    <div class="lobby-card" id="open-games-card">
-      <h3>Open Games</h3>
-      <div id="open-games-list" class="games-list">
-        <p class="muted">Loading...</p>
+    <!-- Hero: left description + right play card -->
+    <div class="lobby-hero">
+
+      <div class="hero-panel">
+        <p class="hero-tagline">The oldest four-player chess — reimagined for online play.</p>
+        <ul class="hero-features">
+          <li>
+            <span class="hf-icon">♟</span>
+            <div><strong>Classic Chaturaji</strong> — dice-driven 4-army battles from ancient India</div>
+          </li>
+          <li>
+            <span class="hf-icon">⚔</span>
+            <div><strong>2v2 Team Mode</strong> — allied armies, shared board, queen power-ups</div>
+          </li>
+          <li>
+            <span class="hf-icon">♛</span>
+            <div><strong>Enochian Chess</strong> — standard pieces, no dice, 4-king throne rules</div>
+          </li>
+        </ul>
+        <div class="hero-mode-pills">
+          <span class="hero-pill">Real-time multiplayer</span>
+          <span class="hero-pill">Play vs Bots</span>
+          <span class="hero-pill">Ranked &amp; Leaderboards</span>
+        </div>
       </div>
-      <button id="btn-refresh" class="btn btn-ghost btn-sm">Refresh</button>
+
+      <div class="lobby-hero-right">
+        <!-- Session resume banner -->
+        <div id="session-banner" class="session-banner" style="display:none">
+          <div class="session-info">
+            Returning as <strong id="session-banner-name"></strong>
+            — Game <strong id="session-banner-code"></strong>
+            (<span id="session-banner-color"></span>)
+          </div>
+          <div class="session-actions">
+            <button id="btn-rejoin-session" class="btn btn-secondary btn-sm">Rejoin</button>
+            <button id="btn-new-session" class="btn btn-ghost btn-sm">Change Name</button>
+          </div>
+        </div>
+
+        <div class="lobby-card">
+          <!-- Game mode selector -->
+          <div class="mode-tabs">
+            <button class="mode-tab active" data-mode="classic">Classic</button>
+            <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
+            <button class="mode-tab premium-tab" data-mode="aow">4-King Chess ⭐</button>
+          </div>
+
+          <div class="input-group" style="margin-top:14px">
+            <label for="player-name">Your Name</label>
+            <input type="text" id="player-name" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+          </div>
+
+          <!-- R&G random color toggle -->
+          <div class="rg-toggle">
+            <label class="toggle-label">
+              <input type="checkbox" id="random-color" checked>
+              <span class="toggle-track"></span>
+              <span>Random color (R&amp;G mode)</span>
+            </label>
+          </div>
+
+          <div class="lobby-actions">
+            <button id="btn-play-bots" class="btn btn-primary btn-lg">
+              Play vs Bots ⭐
+            </button>
+            <button id="btn-create" class="btn btn-secondary btn-lg">
+              <span class="btn-icon">+</span> Create Multiplayer Game
+            </button>
+            <div class="divider"><span>or</span></div>
+            <div class="join-row">
+              <input type="text" id="join-code" placeholder="Room code" maxlength="6" autocomplete="off" style="text-transform:uppercase">
+              <button id="btn-join" class="btn btn-secondary">Join</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="lobby-card" id="recent-games-card">
-      <h3>Recent Games</h3>
-      <div id="recent-games-list" class="games-list">
-        <p class="muted">Loading...</p>
+    <!-- Bottom row: open + recent games -->
+    <div class="lobby-bottom">
+      <div class="lobby-card" id="open-games-card">
+        <h3>Open Games</h3>
+        <div id="open-games-list" class="games-list">
+          <p class="muted">Loading...</p>
+        </div>
+        <button id="btn-refresh" class="btn btn-ghost btn-sm">Refresh</button>
+      </div>
+
+      <div class="lobby-card" id="recent-games-card">
+        <h3>Recent Games</h3>
+        <div id="recent-games-list" class="games-list">
+          <p class="muted">Loading...</p>
+        </div>
       </div>
     </div>
+
   </div>
 </div>
 

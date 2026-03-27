@@ -188,11 +188,72 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 /* ==================== LOBBY ==================== */
 #lobby-screen {
   justify-content: center; align-items: flex-start;
-  padding: 30px 16px;
+  padding: 36px 28px 56px;
   min-height: 100vh; min-height: 100dvh;
 }
-.lobby-container { max-width: 480px; width: 100%; margin: 0 auto; }
-.logo { text-align: center; margin-bottom: 28px; }
+.lobby-container { max-width: 980px; width: 100%; margin: 0 auto; }
+
+/* Top bar: logo + user bar stacked */
+.lobby-topbar { margin-bottom: 28px; }
+
+/* Hero split layout */
+.lobby-hero {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 48px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+/* Left: description + features */
+.hero-panel {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.hero-tagline {
+  font-size: 1.15rem;
+  line-height: 1.8;
+  color: var(--text-dim);
+  max-width: 400px;
+}
+.hero-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.hero-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.hero-features li strong { color: var(--text); display: block; margin-bottom: 1px; }
+.hf-icon { font-size: 1.25rem; width: 30px; text-align: center; flex-shrink: 0; margin-top: 1px; }
+.hero-mode-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.hero-pill {
+  padding: 5px 14px; border: 1px solid rgba(124,58,237,0.28); border-radius: 20px;
+  font-size: 0.75rem; color: rgba(167,139,250,0.8); background: rgba(124,58,237,0.08);
+  letter-spacing: 0.3px;
+}
+
+/* Right: session banner + play card stacked */
+.lobby-hero-right { display: flex; flex-direction: column; gap: 10px; }
+.lobby-hero-right .lobby-card { margin-bottom: 0; }
+
+/* Bottom: open + recent games side by side */
+.lobby-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.lobby-bottom .lobby-card { margin-bottom: 0; }
+
+.logo { text-align: center; margin-bottom: 20px; }
 .logo h1 {
   font-family: var(--font-display);
   font-size: clamp(2rem, 8vw, 3rem);
@@ -203,6 +264,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   background-clip: text;
   color: transparent;
   line-height: 1.1;
+  text-shadow: 0 0 40px rgba(167,139,250,0.2);
 }
 .logo .subtitle {
   color: var(--text-dim);
@@ -530,10 +592,21 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   .tabs-panel { height: 280px; }
 }
 
+/* ==================== RESPONSIVE — LOBBY HERO COLLAPSE ==================== */
+@media (max-width: 860px) {
+  .lobby-hero { grid-template-columns: 1fr; gap: 0; }
+  .hero-panel { display: none; } /* hero description hidden on mobile */
+  .lobby-hero-right { max-width: 520px; margin: 0 auto; width: 100%; }
+  .lobby-bottom { max-width: 520px; margin: 0 auto; width: 100%; }
+}
+@media (max-width: 600px) {
+  .lobby-bottom { grid-template-columns: 1fr; }
+}
+
 /* ==================== RESPONSIVE — PHONES ==================== */
 @media (max-width: 600px) {
   html { font-size: 13px; }
-  #lobby-screen { padding: 16px 12px; }
+  #lobby-screen { padding: 16px 12px 32px; }
   .lobby-container { max-width: 100%; }
   .lobby-card { padding: 14px 12px; }
 
@@ -783,11 +856,6 @@ input[type="text"]::placeholder { color: var(--text-muted); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* ==================== LOBBY TITLE GLOW ==================== */
-.lobby-container > .logo h1 {
-  text-shadow: 0 0 40px rgba(167,139,250,0.2);
 }
 
 /* ==================== LEADERBOARD HEADING ==================== */
