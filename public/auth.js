@@ -30,6 +30,11 @@ async function loadUserProfile() {
         nameInput.value = window.currentProfile.display_name;
         localStorage.setItem('chaturaji_name', window.currentProfile.display_name);
       }
+      // Show admin button if user is admin
+      if (window.currentProfile?.is_admin) {
+        const adminBtn = document.getElementById('btn-admin-link');
+        if (adminBtn) adminBtn.style.display = '';
+      }
     }
   } catch (e) { console.warn('[auth] loadUserProfile:', e); }
 }
