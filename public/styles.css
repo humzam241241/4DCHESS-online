@@ -364,6 +364,21 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .piece-wrap.piece-green  { color: #22c55e; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
 .piece-wrap.piece-black  { color: #c0c8d8; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
 
+/* ==================== THRONE SQUARE (AoW) ==================== */
+.throne-double {
+  background: radial-gradient(circle, rgba(212,175,55,0.22) 0%, transparent 75%) !important;
+  outline: 1px solid rgba(212,175,55,0.35);
+  outline-offset: -1px;
+}
+.throne-partner {
+  display: block;
+  font-size: max(5px, calc(var(--cell-size) * 0.13));
+  opacity: 0.75;
+  line-height: 1;
+  margin-top: 1px;
+  letter-spacing: 0.2px;
+}
+
 /* ==================== BOARD COORDINATES ==================== */
 .coord-label {
   position: absolute; font-size: max(7px, calc(var(--cell-size) * 0.17));

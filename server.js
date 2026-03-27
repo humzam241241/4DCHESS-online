@@ -7,12 +7,17 @@ const path = require('path');
 const Stripe = require('stripe');
 const engine = require('./src/engine');
 const engine2v2 = require('./src/engine2v2');
+const engineAoW = require('./src/engineAoW');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
-function getEngine(gameType) { return gameType === '2v2' ? engine2v2 : engine; }
+function getEngine(gameType) {
+  if (gameType === '2v2') return engine2v2;
+  if (gameType === 'aow') return engineAoW;
+  return engine;
+}
 function isPremium(profile) {
   return profile?.has_lifetime_access === true || profile?.subscription_status === 'active';
 }
@@ -364,10 +369,10 @@ io.on('connection', (socket) => {
   // ---- CREATE GAME ----
   socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic' }, callback) => {
     try {
-      // Premium check for 2v2
-      if (gameType === '2v2') {
+      // Premium check for 2v2 and AoW
+      if (gameType === '2v2' || gameType === 'aow') {
         const profile = await db.getProfile(socket.data.userId);
-        if (!isPremium(profile)) return callback({ error: 'Premium required for 2v2 games' });
+        if (!isPremium(profile)) return callback({ error: 'Premium required for this game mode' });
       }
 
       const gameId = uuidv4();
@@ -672,9 +677,15 @@ async function makeBotMoves(gameId, state, eng = engine) {
         const target = state.board[m.row][m.col];
         if (target) {
           score += 10;
-          if (target.type === 'king') score += 100;
+          if (target.type === 'king')     score += 100;
+          if (target.type === 'queen')    score += 18;
+          if (target.type === 'rook')     score += 10;
           if (target.type === 'elephant') score += 8;
-          if (target.type === 'horse') score += 6;
+          if (target.type === 'bishop')   score += 6;
+          if (target.type === 'horse')    score += 6;
+          if (target.type === 'knight')   score += 6;
+          // Bonus: capturing a double-occupied throne captures an extra piece
+          if (target.thronePartner)       score += 8;
         }
         score += (3.5 - Math.abs(m.row - 3.5)) + (3.5 - Math.abs(m.col - 3.5));
         if (score > bestScore) { bestScore = score; bestMove = { fromRow: r, fromCol: c, toRow: m.row, toCol: m.col }; }

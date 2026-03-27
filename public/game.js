@@ -24,12 +24,22 @@ let replayMoves = [];
 
 const PLAYERS = ['red', 'yellow', 'green', 'black'];
 const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Black' };
-// ♚=King 🐘=Elephant(rook-mover) ♞=Horse(knight-mover) ⛵=Boat(2-sq diagonal jumper) ♟=Pawn 👑=Queen(2-sq any dir, 2v2)
+// AoW renames Green → Blue in display
+const AOW_PLAYERS = ['yellow', 'green', 'red', 'black'];
+const AOW_PLAYER_NAMES = { yellow: 'Yellow', green: 'Blue', red: 'Red', black: 'Black' };
+function playerName(color) {
+  return (gameType === 'aow' ? AOW_PLAYER_NAMES : PLAYER_NAMES)[color] || color;
+}
+// ♚=King 🐘=Elephant ♞=Horse/Knight ⛵=Boat ♟=Pawn 👑=Queen ♝=Bishop ♜=Rook
 const PIECE_ICONS = {
   king: '\u265A', elephant: '\uD83D\uDC18', horse: '\u265E',
-  boat: '\u26F5', pawn: '\u265F', queen: '\uD83D\uDC51'
+  boat: '\u26F5', pawn: '\u265F', queen: '\uD83D\uDC51',
+  bishop: '\u265D', rook: '\u265C', knight: '\u265E'
 };
-const PIECE_ABBR = { king: 'K', elephant: 'El', horse: 'H', boat: 'Bt', pawn: 'P', queen: 'Q' };
+const PIECE_ABBR = {
+  king: 'K', elephant: 'El', horse: 'H', boat: 'Bt', pawn: 'P', queen: 'Q',
+  bishop: 'B', rook: 'R', knight: 'N'
+};
 
 let gameType = 'classic'; // 'classic' | '2v2'
 let selectedMode = 'classic';
@@ -224,7 +234,9 @@ document.getElementById('btn-join').addEventListener('click', () => {
     if (res.gameType) gameType = res.gameType;
     saveSession();
 
-    if (players.length >= 4 || gameState.phase !== 'roll' || gameState.turnNumber > 1) {
+    const inProgress = players.length >= 4 || gameState.turnNumber > 1 ||
+      (gameType !== 'aow' && gameState.phase !== 'roll');
+    if (inProgress) {
       enterGame();
     } else {
       showWaitingRoom();
@@ -242,13 +254,14 @@ function showWaitingRoom() {
 
 function renderWaitingPlayers() {
   const el = document.getElementById('waiting-players');
-  el.innerHTML = PLAYERS.map(color => {
+  const order = gameType === 'aow' ? AOW_PLAYERS : PLAYERS;
+  el.innerHTML = order.map(color => {
     const p = players.find(pl => pl.color === color);
     const filled = !!p;
     return `
       <div class="waiting-slot ${filled ? 'filled' : ''}">
         <div class="color-dot" style="background:${PLAYER_COLORS[color]}"></div>
-        <div>${PLAYER_NAMES[color]}</div>
+        <div>${playerName(color)}</div>
         ${filled
           ? `<div class="player-name">${escapeHtml(p.name)}${p.color === myColor ? ' (You)' : ''}</div>`
           : '<div class="empty-label">Waiting...</div>'
@@ -373,6 +386,14 @@ function renderBoard() {
         lbl.textContent = PIECE_ABBR[piece.type];
         wrap.appendChild(icon);
         wrap.appendChild(lbl);
+        // Throne double-occupancy: show stacked partner bishop
+        if (piece.thronePartner) {
+          cell.classList.add('throne-double');
+          const partnerEl = document.createElement('span');
+          partnerEl.className = 'throne-partner';
+          partnerEl.textContent = (PIECE_ICONS[piece.thronePartner.type] || '♝') + (PIECE_ABBR[piece.thronePartner.type] || 'B');
+          wrap.appendChild(partnerEl);
+        }
         cell.appendChild(wrap);
       }
 
@@ -404,16 +425,22 @@ function onBoardPointerUp(e) {
 function renderTurnIndicator() {
   const el = document.getElementById('turn-indicator');
   if (gameState.winner) {
-    el.textContent = `${PLAYER_NAMES[gameState.winner]} Wins!`;
+    el.textContent = `${playerName(gameState.winner)} Wins!`;
     el.className = `turn-indicator turn-${gameState.winner}`;
   } else {
     const isMe = gameState.currentPlayer === myColor;
-    el.textContent = isMe ? 'Your Turn!' : `${PLAYER_NAMES[gameState.currentPlayer]}'s Turn`;
+    el.textContent = isMe ? 'Your Turn!' : `${playerName(gameState.currentPlayer)}'s Turn`;
     el.className = `turn-indicator turn-${gameState.currentPlayer}`;
   }
 }
 
 function renderDice() {
+  const dicePanel = document.getElementById('dice-panel');
+  if (gameType === 'aow') {
+    if (dicePanel) dicePanel.style.display = 'none';
+    return;
+  }
+  if (dicePanel) dicePanel.style.display = '';
   const die1 = document.getElementById('die-1');
   const die2 = document.getElementById('die-2');
   const rollBtn = document.getElementById('btn-roll');
@@ -445,7 +472,8 @@ function renderDice() {
 const TEAM_COLORS = { red: 'A', yellow: 'B', green: 'A', black: 'B' }; // 2v2 teams
 function renderPlayers() {
   const el = document.getElementById('game-players');
-  const sorted = [...players].sort((a, b) => PLAYERS.indexOf(a.color) - PLAYERS.indexOf(b.color));
+  const order = gameType === 'aow' ? AOW_PLAYERS : PLAYERS;
+  const sorted = [...players].sort((a, b) => order.indexOf(a.color) - order.indexOf(b.color));
   el.innerHTML = sorted.map(p => {
     const isElim = gameState.eliminated.includes(p.color);
     const isCurrent = gameState.currentPlayer === p.color && !gameState.winner;
@@ -468,14 +496,22 @@ function renderPlayers() {
 function countPieces(color) {
   let n = 0;
   for (let r = 0; r < 8; r++)
-    for (let c = 0; c < 8; c++)
-      if (gameState.board[r][c]?.color === color) n++;
+    for (let c = 0; c < 8; c++) {
+      const p = gameState.board[r][c];
+      if (!p) continue;
+      if (p.color === color) {
+        n++;
+        if (p.thronePartner && p.thronePartner.color === color) n++;
+      }
+    }
   return n;
 }
 
 // ==================== INTERACTION ====================
 function onCellClick(row, col) {
-  if (!gameState || gameState.winner || gameState.currentPlayer !== myColor || !gameState.dice) return;
+  const noDiceGame = gameType === 'aow';
+  if (!gameState || gameState.winner || gameState.currentPlayer !== myColor) return;
+  if (!noDiceGame && !gameState.dice) return;
 
   // Clicking a valid move target
   if (selectedCell && validMoves.some(m => m.row === row && m.col === col)) {
@@ -566,7 +602,7 @@ function addMoveToHistory(move) {
     : '';
   div.innerHTML = `
     <span class="turn-num">${move.turn}.</span>
-    <span style="color:${PLAYER_COLORS[move.player]}">${PLAYER_NAMES[move.player]}</span>
+    <span style="color:${PLAYER_COLORS[move.player]}">${playerName(move.player)}</span>
     ${move.piece} ${move.from.notation}-${move.to.notation}${capText}${promoText}
   `;
   el.appendChild(div);
@@ -617,7 +653,7 @@ socket.on('player-joined', (data) => {
   players = data.players;
   renderWaitingPlayers();
   renderPlayers();
-  addSystemMessage(`${data.name} joined as ${PLAYER_NAMES[data.color]}`);
+  addSystemMessage(`${data.name} joined as ${playerName(data.color)}`);
   haptic('light');
 });
 
@@ -649,7 +685,7 @@ socket.on('move-made', (data) => {
   if (data.move) {
     lastMove = { from: data.move.from, to: data.move.to };
     addMoveToHistory(data.move);
-    if (data.move.promotion) addSystemMessage(`${PLAYER_NAMES[data.move.player]} pawn promoted to ${data.move.promotion}!`);
+    if (data.move.promotion) addSystemMessage(`${playerName(data.move.player)} pawn promoted to ${data.move.promotion}!`);
   }
   selectedCell = null;
   validMoves = [];
@@ -662,7 +698,7 @@ socket.on('turn-skipped', (data) => {
   selectedCell = null;
   validMoves = [];
   renderGame();
-  addSystemMessage(`${PLAYER_NAMES[data.player]} skipped`);
+  addSystemMessage(`${playerName(data.player)} skipped`);
 });
 
 socket.on('chat-message', addChatMessage);
@@ -683,7 +719,7 @@ socket.on('game-over', (data) => {
   const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black' };
   const winnerLabel = data.winnerTeam
     ? `${teamNames[data.winnerTeam] || data.winnerTeam} Win!`
-    : `${PLAYER_NAMES[data.winner] || data.winner} Wins!`;
+    : `${playerName(data.winner) || data.winner} Wins!`;
   text.textContent = winnerLabel;
   text.className = data.winnerTeam ? '' : `turn-${data.winner}`;
   stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
@@ -1005,14 +1041,24 @@ document.getElementById('player-name').addEventListener('change', (e) => {
 function updateModeUI(mode) {
   const sub = document.querySelector('.subtitle');
   const qRow = document.getElementById('queen-legend-row');
-  if (sub) sub.textContent = mode === '2v2' ? '2v2 Team Battle — With Queens' : 'Four Kings Chess — Online Multiplayer';
+  const aowLegend = document.getElementById('aow-legend-rows');
+  const classicLegend = document.getElementById('classic-legend-rows');
+  if (sub) {
+    if (mode === '2v2') sub.textContent = '2v2 Team Battle — With Queens';
+    else if (mode === 'aow') sub.textContent = '4-King Chess — Standard Chess Pieces';
+    else sub.textContent = 'Four Kings Chess — Online Multiplayer';
+  }
   if (qRow) qRow.style.display = mode === '2v2' ? '' : 'none';
+  if (aowLegend) aowLegend.style.display = mode === 'aow' ? '' : 'none';
+  if (classicLegend) classicLegend.style.display = mode === 'aow' ? 'none' : '';
 }
 updateModeUI('classic');
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const mode = tab.dataset.mode;
-    if (mode === '2v2' && !window.isPremium?.()) { window.showPaymentWall?.(); return; }
+    if ((mode === '2v2' || mode === 'aow') && !window.isPremium?.()) {
+      window.showPaymentWall?.(); return;
+    }
     document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     selectedMode = mode;

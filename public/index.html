@@ -143,6 +143,7 @@
       <div class="mode-tabs">
         <button class="mode-tab active" data-mode="classic">Classic</button>
         <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
+        <button class="mode-tab premium-tab" data-mode="aow">4-King Chess ⭐</button>
       </div>
 
       <div class="input-group" style="margin-top:14px">
@@ -241,13 +242,24 @@
 
       <div class="panel piece-legend">
         <h3>Pieces</h3>
-        <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir, can be captured</div>
-        <div class="legend-row"><span class="leg-sym">🐘</span> <b>Elephant (El)</b> — slides orthogonally like Rook</div>
-        <div class="legend-row"><span class="leg-sym">♞</span> <b>Horse (H)</b> — L-shape jump like Knight</div>
-        <div class="legend-row"><span class="leg-sym">⛵</span> <b>Boat (Bt)</b> — jumps exactly 2 diag, can't capture King</div>
-        <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to dead piece</div>
-        <div class="legend-row" id="queen-legend-row"><span class="leg-sym">👑</span> <b>Queen (Q)</b> — jumps exactly 2 sq any direction <i>(2v2)</i></div>
-        <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Dice: King die = King/Queen/Pawn. Missing piece = Pawn instead.</div>
+        <div id="classic-legend-rows">
+          <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir, can be captured</div>
+          <div class="legend-row"><span class="leg-sym">🐘</span> <b>Elephant (El)</b> — slides orthogonally like Rook</div>
+          <div class="legend-row"><span class="leg-sym">♞</span> <b>Horse (H)</b> — L-shape jump like Knight</div>
+          <div class="legend-row"><span class="leg-sym">⛵</span> <b>Boat (Bt)</b> — jumps exactly 2 diag, can't capture King</div>
+          <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to dead piece</div>
+          <div class="legend-row" id="queen-legend-row"><span class="leg-sym">👑</span> <b>Queen (Q)</b> — jumps exactly 2 sq any direction <i>(2v2)</i></div>
+          <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Dice: King die = King/Queen/Pawn. Missing piece = Pawn instead.</div>
+        </div>
+        <div id="aow-legend-rows" style="display:none">
+          <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir; capture to eliminate</div>
+          <div class="legend-row"><span class="leg-sym">♜</span> <b>Rook (R)</b> — slides orthogonally</div>
+          <div class="legend-row"><span class="leg-sym">♝</span> <b>Bishop (B)</b> — slides diagonally</div>
+          <div class="legend-row"><span class="leg-sym">♞</span> <b>Knight (N)</b> — L-shape jump</div>
+          <div class="legend-row"><span class="leg-sym">♛</span> <b>Queen (Q)</b> — slides any direction</div>
+          <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to Queen</div>
+          <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Throne (corner): King+Bishop start stacked. Enemy entering captures both.</div>
+        </div>
       </div>
     </div>
 
