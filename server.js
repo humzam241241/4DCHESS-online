@@ -99,7 +99,7 @@ app.use((req, res, next) => {
   if (origin && (ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   next();
@@ -280,22 +280,19 @@ app.get('/api/admin/games', requireAdmin, async (req, res) => {
 
 // Revenue from Stripe
 app.get('/api/admin/revenue', requireAdmin, async (req, res) => {
+  let lifetimeTotal = 0, activeSubscriptions = 0;
   try {
-    const [lifetimeCharges, monthlyCharges] = await Promise.all([
-      stripe.paymentIntents.list({ limit: 100 }),
-      stripe.subscriptions.list({ limit: 100, status: 'active' })
-    ]);
-    const lifetimeTotal = lifetimeCharges.data
+    const charges = await stripe.paymentIntents.list({ limit: 100 });
+    lifetimeTotal = charges.data
       .filter(p => p.status === 'succeeded')
       .reduce((sum, p) => sum + p.amount, 0);
-    const monthlyTotal = monthlyCharges.data.length * 300; // $3 each
-    res.json({
-      lifetimeTotal,
-      monthlyTotal,
-      grossTotal: lifetimeTotal + monthlyTotal,
-      activeSubscriptions: monthlyCharges.data.length
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.warn('[admin/revenue] paymentIntents.list failed:', e.message); }
+  try {
+    const subs = await stripe.subscriptions.list({ limit: 100, status: 'active' });
+    activeSubscriptions = subs.data.length;
+  } catch (e) { console.warn('[admin/revenue] subscriptions.list failed:', e.message); }
+  const monthlyTotal = activeSubscriptions * 300;
+  res.json({ lifetimeTotal, monthlyTotal, grossTotal: lifetimeTotal + monthlyTotal, activeSubscriptions });
 });
 
 // ==================== STRIPE CHECKOUT ====================
