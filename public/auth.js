@@ -183,6 +183,22 @@ async function initApp() {
     document.getElementById('leaderboard-overlay').style.display = 'none';
   });
 
+  // History overlay
+  document.getElementById('btn-history')?.addEventListener('click', () => {
+    document.getElementById('history-overlay').style.display = 'flex';
+  });
+  document.getElementById('btn-close-history')?.addEventListener('click', () => {
+    document.getElementById('history-overlay').style.display = 'none';
+  });
+  document.querySelectorAll('.history-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.history-pane').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('htab-' + tab.dataset.htab)?.classList.add('active');
+    });
+  });
+
   // Load config from backend — no hardcoded keys in frontend
   let config;
   try {

@@ -119,6 +119,7 @@
     <div class="user-bar" id="user-bar">
       <span id="user-display-name" class="user-name"></span>
       <div class="user-actions">
+        <button id="btn-history" class="btn btn-ghost btn-sm">History &amp; Rules</button>
         <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
         <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">⚙ Admin</button>
         <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
@@ -311,6 +312,73 @@
     <div class="overlay-actions">
       <button id="btn-replay" class="btn btn-secondary">Watch Replay</button>
       <button id="btn-back-lobby" class="btn btn-primary">Back to Lobby</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== HISTORY & INFO OVERLAY ==================== -->
+<div id="history-overlay" class="overlay" style="display:none">
+  <div class="overlay-content history-content">
+    <button id="btn-close-history" class="btn-close-overlay">✕</button>
+
+    <!-- Nav tabs -->
+    <div class="history-tabs">
+      <button class="history-tab active" data-htab="why">Why</button>
+      <button class="history-tab" data-htab="enochian">Enochian Chess</button>
+      <button class="history-tab" data-htab="chaturaji">Chaturaji</button>
+      <button class="history-tab" data-htab="social">Community</button>
+    </div>
+
+    <!-- WHY -->
+    <div class="history-pane active" id="htab-why">
+      <h2>Why This App?</h2>
+      <!-- PLACEHOLDER: Uthman to provide this content -->
+      <p class="history-placeholder">✦ Content coming soon — Uthman's vision statement will appear here.</p>
+    </div>
+
+    <!-- ENOCHIAN CHESS -->
+    <div class="history-pane" id="htab-enochian">
+      <h2>Enochian Chess</h2>
+      <!-- PLACEHOLDER: Uthman to provide history + rules -->
+      <p class="history-placeholder">✦ History and rules content coming soon.</p>
+      <div class="history-rules-preview">
+        <h3>Quick Reference</h3>
+        <p>4-King Chess is played on a standard 8×8 board with four armies, one at each corner. Each corner throne square begins with a King and Bishop stacked together. Standard chess piece movement applies. Capture a King to eliminate that player. Last standing wins.</p>
+        <p style="margin-top:10px;font-style:italic;color:var(--text-muted)">Full historical background and extended rules will be added once finalized.</p>
+      </div>
+    </div>
+
+    <!-- CHATURAJI -->
+    <div class="history-pane" id="htab-chaturaji">
+      <h2>Chaturaji</h2>
+      <!-- PLACEHOLDER: Uthman to provide history + rules -->
+      <p class="history-placeholder">✦ History and rules content coming soon.</p>
+      <div class="history-rules-preview">
+        <h3>Quick Reference</h3>
+        <p>Chaturaji ("Four Kings") is an ancient Indian four-player chess variant dating back to the 7th century. Players roll dice to determine which piece type to move. Pieces include the King, Elephant (Rook), Horse (Knight), Boat (Bishop), and Pawn.</p>
+        <p style="margin-top:10px;font-style:italic;color:var(--text-muted)">Full historical background will be added once finalized.</p>
+      </div>
+    </div>
+
+    <!-- SOCIAL / COMMUNITY -->
+    <div class="history-pane" id="htab-social">
+      <h2>Community</h2>
+      <!-- PLACEHOLDER: links to be filled when Uthman provides them -->
+      <p class="history-placeholder">✦ Social links coming soon.</p>
+      <div class="social-links-grid" id="social-links-grid">
+        <a class="social-link placeholder-link" href="#" onclick="return false">
+          <span class="social-icon">💬</span>
+          <span>Discord — link coming soon</span>
+        </a>
+        <a class="social-link placeholder-link" href="#" onclick="return false">
+          <span class="social-icon">▶</span>
+          <span>YouTube — link coming soon</span>
+        </a>
+        <a class="social-link placeholder-link" href="#" onclick="return false">
+          <span class="social-icon">📝</span>
+          <span>Substack — link coming soon</span>
+        </a>
+      </div>
     </div>
   </div>
 </div>
