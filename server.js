@@ -17,6 +17,9 @@ function isPremium(profile) {
   return profile?.has_lifetime_access === true || profile?.subscription_status === 'active';
 }
 
+// Admin: email allowlist from env var  e.g. ADMIN_EMAILS=a@b.com,c@d.com
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -183,6 +186,119 @@ app.get('/api/leaderboard', requireAuth, async (req, res) => {
     res.json(await db.getLeaderboard());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// ==================== ADMIN MIDDLEWARE + ROUTES ====================
+
+async function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required' });
+  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
+  if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+  const email = (user.email || '').toLowerCase();
+  if (!ADMIN_EMAILS.includes(email)) return res.status(403).json({ error: 'Admin access required' });
+  req.user = user;
+  next();
+}
+
+// Overview stats
+app.get('/api/admin/overview', requireAdmin, async (req, res) => {
+  try {
+    const [{ data: profiles }, { data: games }] = await Promise.all([
+      supabase.from('profiles').select('has_lifetime_access, subscription_status, is_admin'),
+      supabase.from('games').select('status')
+    ]);
+    const p = profiles || [];
+    const g = games || [];
+    res.json({
+      totalUsers:        p.length,
+      lifetimeUsers:     p.filter(u => u.has_lifetime_access).length,
+      activeSubscribers: p.filter(u => u.subscription_status === 'active').length,
+      freeUsers:         p.filter(u => !u.has_lifetime_access && u.subscription_status !== 'active').length,
+      adminUsers:        p.filter(u => u.is_admin).length,
+      totalGames:        g.length,
+      activePlaying:     g.filter(x => x.status === 'playing').length,
+      waitingGames:      g.filter(x => x.status === 'waiting').length,
+      finishedGames:     g.filter(x => x.status === 'finished').length,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// All users (join auth.users + profiles + game counts)
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const { data: { users: authUsers } } = await supabase.auth.admin.listUsers({ perPage: 500 });
+    const { data: profiles } = await supabase.from('profiles').select('*');
+    const { data: playerRows } = await supabase.from('players').select('user_id').not('user_id', 'is', null);
+
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+    const gameCounts = {};
+    (playerRows || []).forEach(r => {
+      gameCounts[r.user_id] = (gameCounts[r.user_id] || 0) + 1;
+    });
+
+    const users = (authUsers || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      display_name: profileMap[u.id]?.display_name || u.user_metadata?.full_name || null,
+      avatar_url: profileMap[u.id]?.avatar_url || null,
+      has_lifetime_access: profileMap[u.id]?.has_lifetime_access || false,
+      subscription_status: profileMap[u.id]?.subscription_status || 'none',
+      is_admin: profileMap[u.id]?.is_admin || false,
+      stripe_customer_id: profileMap[u.id]?.stripe_customer_id || null,
+      games_played: gameCounts[u.id] || 0,
+      created_at: u.created_at,
+    })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({ users });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Update a user's access/permissions
+app.patch('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const allowed = ['has_lifetime_access', 'subscription_status', 'is_admin'];
+    const updates = {};
+    for (const key of allowed) {
+      if (key in req.body) updates[key] = req.body[key];
+    }
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
+    await db.updateProfile(userId, updates);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Recent games
+app.get('/api/admin/games', requireAdmin, async (req, res) => {
+  try {
+    const games = await db.getRecentGames(50);
+    res.json({ games });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Revenue from Stripe
+app.get('/api/admin/revenue', requireAdmin, async (req, res) => {
+  try {
+    const [lifetimeCharges, monthlyCharges] = await Promise.all([
+      stripe.paymentIntents.list({ limit: 100 }),
+      stripe.subscriptions.list({ limit: 100, status: 'active' })
+    ]);
+    const lifetimeTotal = lifetimeCharges.data
+      .filter(p => p.status === 'succeeded')
+      .reduce((sum, p) => sum + p.amount, 0);
+    const monthlyTotal = monthlyCharges.data.length * 300; // $3 each
+    res.json({
+      lifetimeTotal,
+      monthlyTotal,
+      grossTotal: lifetimeTotal + monthlyTotal,
+      activeSubscriptions: monthlyCharges.data.length
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== STRIPE CHECKOUT ====================
 
 app.post('/api/create-checkout', requireAuth, async (req, res) => {
   try {
