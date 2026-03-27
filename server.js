@@ -88,6 +88,20 @@ app.post('/api/stripe-webhook',
 );
 
 // ==================== MIDDLEWARE ====================
+
+// CORS for REST API (Socket.IO has its own cors config above)
+const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://chaturaji-4dchess.vercel.app'];
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
