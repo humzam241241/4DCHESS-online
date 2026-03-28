@@ -864,3 +864,23 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 /* ==================== HISTORY OVERLAY HEADING ==================== */
 .history-content > .overlay-header h2 { font-family: var(--font-display); letter-spacing: 3px; }
 .history-pane h2 { font-family: var(--font-display); letter-spacing: 2px; }
+
+/* ==================== FROZEN PIECES (Enochian Chess) ==================== */
+.piece-wrap.frozen {
+  opacity: 0.3;
+  filter: grayscale(80%);
+  pointer-events: none;
+}
+.player-row.frozen .name {
+  font-style: italic;
+  opacity: 0.6;
+}
+.frozen-badge {
+  font-size: 0.65em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #475569;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}

@@ -147,7 +147,11 @@
           </li>
           <li>
             <span class="hf-icon">♛</span>
-            <div><strong>Enochian Chess</strong> — standard pieces, no dice, 4-king throne rules</div>
+            <div><strong>4-King Chess</strong> — standard pieces, no dice, 4-king throne rules</div>
+          </li>
+          <li>
+            <span class="hf-icon">✦</span>
+            <div><strong>Enochian Chess</strong> — elemental teams, frozen pieces, alibaba queen</div>
           </li>
         </ul>
         <div class="hero-mode-pills">
@@ -177,6 +181,7 @@
             <button class="mode-tab active" data-mode="classic">Classic</button>
             <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
             <button class="mode-tab premium-tab" data-mode="aow">4-King Chess ⭐</button>
+            <button class="mode-tab premium-tab" data-mode="enochian">Enochian ⭐</button>
           </div>
 
           <div class="input-group" style="margin-top:14px">
@@ -299,6 +304,15 @@
           <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to Queen</div>
           <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Throne (corner): King+Bishop start stacked. Enemy entering captures both.</div>
         </div>
+        <div id="enochian-legend-rows" style="display:none">
+          <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir; capture freezes enemy army</div>
+          <div class="legend-row"><span class="leg-sym">♜</span> <b>Rook (R)</b> — slides orthogonally</div>
+          <div class="legend-row"><span class="leg-sym">♝</span> <b>Bishop (B)</b> — slides diagonally</div>
+          <div class="legend-row"><span class="leg-sym">♞</span> <b>Knight (N)</b> — L-shape jump</div>
+          <div class="legend-row"><span class="leg-sym">👑</span> <b>Queen (Q)</b> — leaps exactly 2 sq any direction (Alibaba)</div>
+          <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to its typed piece</div>
+          <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Teams: Red+Yellow vs Blue+Black. Capture both enemy kings to win. Frozen pieces block as terrain.</div>
+        </div>
       </div>
     </div>
 
@@ -370,51 +384,60 @@
     <!-- WHY -->
     <div class="history-pane active" id="htab-why">
       <h2>Why This App?</h2>
-      <!-- PLACEHOLDER: Uthman to provide this content -->
-      <p class="history-placeholder">✦ Content coming soon — Uthman's vision statement will appear here.</p>
+      <p>Communication is an important aspect of life, especially postmodern life with many of us using communications as a means beyond our comprehension.</p>
+      <p>The <strong>Hermetic Order of the Golden Dawn</strong> (HOGD) used Enochian Chess to communicate with each other divinely and psychically. By making this app we are reinstating an ancient esoteric tradition of speaking to another person that anyone can pick up from the comfort of their phone. The practitioner of the mystical arts no longer needs to be a cloaked figure; it can be from the leisure of being home playing chess.</p>
+      <p>Even if you are not within the inclinations of spirituality, the psychological communication of chess is undeniable. Within the constraints of chess, you can learn a lot about how a person logically operates and behaves. With how they play, to what moves they make, to what tactics they use.</p>
+      <p>The aim of the <strong>"Chaturaji! OG Enochian Chess"</strong> app is simple: <em>fostering connections and ideas</em>. By participating in this app, you are a part of how communication will change for the greater part of history.</p>
     </div>
 
     <!-- ENOCHIAN CHESS -->
     <div class="history-pane" id="htab-enochian">
       <h2>Enochian Chess</h2>
-      <!-- PLACEHOLDER: Uthman to provide history + rules -->
-      <p class="history-placeholder">✦ History and rules content coming soon.</p>
+      <p>The symbolic richness of Chaturaji did not remain confined to the Indian world. In time, its underlying structure &mdash; fourfold kingship, elemental conflict, and the fusion of strategy with fate &mdash; found a new and unexpected life within Western esoteric traditions, particularly through what came to be known as <strong>Enochian Chess</strong>.</p>
+      <p>This adaptation is most closely associated with the system of angelic magic recorded by <strong>John Dee</strong> and his scryer <strong>Edward Kelley</strong>, whose work laid the foundation for what is now called Enochian magic. Centuries later, within the framework of the <strong>Hermetic Order of the Golden Dawn</strong>, this system was expanded into a ritualized chess-like practice.</p>
+      <p>Here, the idea of a four-player game re-emerges, but now transfigured through an explicitly occult lens. The board is divided into four quadrants, each corresponding to one of the classical elements: <strong>Fire, Water, Air, and Earth</strong>. It was governed by distinct angelic hierarchies derived from the Enochian tablets. What had once been a representation of earthly kings and armies becomes a field of interaction between elemental and spiritual forces.</p>
       <div class="history-rules-preview">
-        <h3>Quick Reference</h3>
-        <p>4-King Chess is played on a standard 8×8 board with four armies, one at each corner. Each corner throne square begins with a King and Bishop stacked together. Standard chess piece movement applies. Capture a King to eliminate that player. Last standing wins.</p>
-        <p style="margin-top:10px;font-style:italic;color:var(--text-muted)">Full historical background and extended rules will be added once finalized.</p>
+        <h3>How Enochian Chess Works</h3>
+        <p><strong>Teams:</strong> Red (Fire) + Yellow (Air) vs Blue (Water) + Black (Earth). Each team must capture both enemy kings to win.</p>
+        <p><strong>Pieces:</strong> Each player has a King, Queen, Bishop, Knight, Rook, and 4 typed Pawns (9 pieces). The Queen moves as an Alibaba &mdash; leaping exactly 2 squares in any direction.</p>
+        <p><strong>Throne Squares:</strong> The four corners are thrones. Each starts with a King and Bishop stacked together. Once separated, only one piece may sit on a throne.</p>
+        <p><strong>Frozen Pieces:</strong> When a King is captured, all that player's remaining pieces freeze in place. They cannot move, cannot threaten, and cannot be captured &mdash; they become blocking terrain on the board.</p>
+        <p><strong>Pawn Promotion:</strong> Each pawn is typed (of Queen, of Rook, of Knight, or of Bishop) and may only promote to its type. Promotion is delayed if all four pawns are still alive.</p>
+        <p><strong>No Dice:</strong> Unlike Classic Chaturaji, Enochian Chess uses no dice &mdash; players choose freely which piece to move.</p>
       </div>
     </div>
 
     <!-- CHATURAJI -->
     <div class="history-pane" id="htab-chaturaji">
       <h2>Chaturaji</h2>
-      <!-- PLACEHOLDER: Uthman to provide history + rules -->
-      <p class="history-placeholder">✦ History and rules content coming soon.</p>
+      <p>Chaturaji is usually understood as a four-player Indian chess-like game whose name means <strong>"four kings."</strong> The historical record is thin, so there is no single fixed myth of origin the way some games have a neat legendary inventor story.</p>
+      <p>Its mythological background comes mainly from the <strong>Mahabharata</strong> and the older idea of <em>chaturanga</em> as a battle formation. <em>Chaturanga</em> is a Sanskrit term for a formation mentioned in the Mahabharata, and later discussions of Chaturaji connect the game to a Mahabharata passage describing dice, a board, and pieces in four colors. That is why the game is often read as a symbolic reenactment of war, chance, and the fourfold structure of an army or kingdom.</p>
+      <h3>The Ravana Legend</h3>
+      <p>Another Chaturaji myth comes from the Ramayana epic villain, <strong>Ravana</strong>. Within the narrative world of the Ramayana, Ravana is not merely a tyrant or antagonist, but a figure of immense intellect &mdash; versed in statecraft, metaphysics, warfare, and the hidden sciences. To attribute a game like Chaturaji to such a figure is to elevate it beyond pastime into something closer to a strategic and cosmological instrument.</p>
+      <p>In this mythic framing, Chaturaji becomes a structured reflection of war itself. The four players represent rival kings or powers, each maneuvering within a shared field of conflict. The pieces correspond to the classical fourfold army: infantry, cavalry, elephants, and chariots &mdash; echoing the ancient concept of <em>chaturanga</em>, the totality of martial force.</p>
+      <p>Yet unlike later forms of chess, Chaturaji incorporates dice, and it is here that the game transcends pure strategy. The roll of dice introduces an element of fate, suggesting that even the most calculated plans are subject to forces beyond human control. War, in this sense, is revealed as a convergence of intention and destiny.</p>
       <div class="history-rules-preview">
         <h3>Quick Reference</h3>
         <p>Chaturaji ("Four Kings") is an ancient Indian four-player chess variant dating back to the 7th century. Players roll dice to determine which piece type to move. Pieces include the King, Elephant (Rook), Horse (Knight), Boat (Bishop), and Pawn.</p>
-        <p style="margin-top:10px;font-style:italic;color:var(--text-muted)">Full historical background will be added once finalized.</p>
       </div>
     </div>
 
     <!-- SOCIAL / COMMUNITY -->
     <div class="history-pane" id="htab-social">
       <h2>Community</h2>
-      <!-- PLACEHOLDER: links to be filled when Uthman provides them -->
-      <p class="history-placeholder">✦ Social links coming soon.</p>
+      <p>Join the community and connect with other players, share strategies, and stay updated on the latest developments.</p>
       <div class="social-links-grid" id="social-links-grid">
-        <a class="social-link placeholder-link" href="#" onclick="return false">
+        <a class="social-link" href="https://discord.gg/HU7zFR3CWU" target="_blank" rel="noopener noreferrer">
           <span class="social-icon">💬</span>
-          <span>Discord — link coming soon</span>
+          <span>Discord — Join the Server</span>
         </a>
-        <a class="social-link placeholder-link" href="#" onclick="return false">
+        <a class="social-link" href="https://youtube.com/@TBOG786" target="_blank" rel="noopener noreferrer">
           <span class="social-icon">▶</span>
-          <span>YouTube — link coming soon</span>
+          <span>YouTube — @TBOG786</span>
         </a>
-        <a class="social-link placeholder-link" href="#" onclick="return false">
+        <a class="social-link" href="https://substack.com/@mufti963khrollo" target="_blank" rel="noopener noreferrer">
           <span class="social-icon">📝</span>
-          <span>Substack — link coming soon</span>
+          <span>Substack — @mufti963khrollo</span>
         </a>
       </div>
     </div>

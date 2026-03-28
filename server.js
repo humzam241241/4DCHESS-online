@@ -8,6 +8,7 @@ const Stripe = require('stripe');
 const engine = require('./src/engine');
 const engine2v2 = require('./src/engine2v2');
 const engineAoW = require('./src/engineAoW');
+const engineEnochian = require('./src/engineEnochian');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
 
@@ -16,6 +17,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 function getEngine(gameType) {
   if (gameType === '2v2') return engine2v2;
   if (gameType === 'aow') return engineAoW;
+  if (gameType === 'enochian') return engineEnochian;
   return engine;
 }
 function isPremium(profile) {
@@ -370,7 +372,7 @@ io.on('connection', (socket) => {
   socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic' }, callback) => {
     try {
       // Premium check for 2v2 and AoW
-      if (gameType === '2v2' || gameType === 'aow') {
+      if (gameType === '2v2' || gameType === 'aow' || gameType === 'enochian') {
         const profile = await db.getProfile(socket.data.userId);
         if (!isPremium(profile)) return callback({ error: 'Premium required for this game mode' });
       }
@@ -509,7 +511,7 @@ io.on('connection', (socket) => {
     const availTypes = eng.getAvailablePieceTypes(state);
     if (!availTypes.includes(piece.type)) return callback({ moves: [] });
 
-    callback({ moves: eng.getValidMoves(state.board, row, col) });
+    callback({ moves: eng.getValidMoves(state.board, row, col, state) });
   });
 
   // ---- MAKE MOVE ----
@@ -671,7 +673,7 @@ async function makeBotMoves(gameId, state, eng = engine) {
     for (let c = 0; c < 8; c++) {
       const p = state.board[r][c];
       if (!p || p.color !== state.currentPlayer || !types.includes(p.type)) continue;
-      const moves = eng.getValidMoves(state.board, r, c);
+      const moves = eng.getValidMoves(state.board, r, c, state);
       for (const m of moves) {
         let score = Math.random() * 2;
         const target = state.board[m.row][m.col];

@@ -28,7 +28,7 @@ const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Bla
 const AOW_PLAYERS = ['yellow', 'green', 'red', 'black'];
 const AOW_PLAYER_NAMES = { yellow: 'Yellow', green: 'Blue', red: 'Red', black: 'Black' };
 function playerName(color) {
-  return (gameType === 'aow' ? AOW_PLAYER_NAMES : PLAYER_NAMES)[color] || color;
+  return ((gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYER_NAMES : PLAYER_NAMES)[color] || color;
 }
 // ♚=King 🐘=Elephant ♞=Horse/Knight ⛵=Boat ♟=Pawn 👑=Queen ♝=Bishop ♜=Rook
 const PIECE_ICONS = {
@@ -41,7 +41,7 @@ const PIECE_ABBR = {
   bishop: 'B', rook: 'R', knight: 'N'
 };
 
-let gameType = 'classic'; // 'classic' | '2v2'
+let gameType = 'classic'; // 'classic' | '2v2' | 'aow' | 'enochian'
 let selectedMode = 'classic';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 
@@ -235,7 +235,7 @@ document.getElementById('btn-join').addEventListener('click', () => {
     saveSession();
 
     const inProgress = players.length >= 4 || gameState.turnNumber > 1 ||
-      (gameType !== 'aow' && gameState.phase !== 'roll');
+      (gameType !== 'aow' && gameType !== 'enochian' && gameState.phase !== 'roll');
     if (inProgress) {
       enterGame();
     } else {
@@ -254,7 +254,7 @@ function showWaitingRoom() {
 
 function renderWaitingPlayers() {
   const el = document.getElementById('waiting-players');
-  const order = gameType === 'aow' ? AOW_PLAYERS : PLAYERS;
+  const order = (gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYERS : PLAYERS;
   el.innerHTML = order.map(color => {
     const p = players.find(pl => pl.color === color);
     const filled = !!p;
@@ -386,6 +386,10 @@ function renderBoard() {
         lbl.textContent = PIECE_ABBR[piece.type];
         wrap.appendChild(icon);
         wrap.appendChild(lbl);
+        // Frozen pieces: greyed out, not interactive
+        if (gameState.frozen?.includes(piece.color)) {
+          wrap.classList.add('frozen');
+        }
         // Throne double-occupancy: show stacked partner bishop
         if (piece.thronePartner) {
           cell.classList.add('throne-double');
@@ -436,7 +440,7 @@ function renderTurnIndicator() {
 
 function renderDice() {
   const dicePanel = document.getElementById('dice-panel');
-  if (gameType === 'aow') {
+  if (gameType === 'aow' || gameType === 'enochian') {
     if (dicePanel) dicePanel.style.display = 'none';
     return;
   }
@@ -470,22 +474,26 @@ function renderDice() {
 }
 
 const TEAM_COLORS = { red: 'A', yellow: 'B', green: 'A', black: 'B' }; // 2v2 teams
+const ENOCHIAN_TEAM_COLORS = { red: 'A', yellow: 'A', green: 'B', black: 'B' }; // Enochian teams
 function renderPlayers() {
   const el = document.getElementById('game-players');
-  const order = gameType === 'aow' ? AOW_PLAYERS : PLAYERS;
+  const order = (gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYERS : PLAYERS;
   const sorted = [...players].sort((a, b) => order.indexOf(a.color) - order.indexOf(b.color));
   el.innerHTML = sorted.map(p => {
     const isElim = gameState.eliminated.includes(p.color);
+    const isFroz = gameState.frozen?.includes(p.color);
     const isCurrent = gameState.currentPlayer === p.color && !gameState.winner;
     const count = countPieces(p.color);
-    const teamBadge = gameType === '2v2'
-      ? `<span class="team-badge team-${TEAM_COLORS[p.color]}">${TEAM_COLORS[p.color]}</span>` : '';
+    let teamBadge = '';
+    if (gameType === '2v2') teamBadge = `<span class="team-badge team-${TEAM_COLORS[p.color]}">${TEAM_COLORS[p.color]}</span>`;
+    else if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_COLORS[p.color]}</span>`;
     return `
-      <div class="player-row ${isElim ? 'eliminated' : ''} ${isCurrent ? 'current' : ''}">
+      <div class="player-row ${isElim ? 'eliminated' : ''} ${isFroz ? 'frozen' : ''} ${isCurrent ? 'current' : ''}">
         <span class="dot" style="background:${PLAYER_COLORS[p.color]}"></span>
         <span class="name">${escapeHtml(p.name)}</span>
         ${teamBadge}
         ${p.color === myColor ? '<span class="you-badge">YOU</span>' : ''}
+        ${isFroz ? '<span class="frozen-badge">FROZEN</span>' : ''}
         ${!p.connected && p.socket_id !== null ? '<span class="disconnected">DC</span>' : ''}
         <span class="pieces">${count}</span>
       </div>
@@ -509,7 +517,7 @@ function countPieces(color) {
 
 // ==================== INTERACTION ====================
 function onCellClick(row, col) {
-  const noDiceGame = gameType === 'aow';
+  const noDiceGame = gameType === 'aow' || gameType === 'enochian';
   if (!gameState || gameState.winner || gameState.currentPlayer !== myColor) return;
   if (!noDiceGame && !gameState.dice) return;
 
@@ -716,7 +724,7 @@ socket.on('game-over', (data) => {
   const text = document.getElementById('winner-text');
   const stats = document.getElementById('winner-stats');
   // Handle 2v2 team win
-  const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black' };
+  const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black', ry: 'Red & Yellow', gb: 'Blue & Black' };
   const winnerLabel = data.winnerTeam
     ? `${teamNames[data.winnerTeam] || data.winnerTeam} Win!`
     : `${playerName(data.winner) || data.winner} Wins!`;
@@ -1042,21 +1050,24 @@ function updateModeUI(mode) {
   const sub = document.querySelector('.subtitle');
   const qRow = document.getElementById('queen-legend-row');
   const aowLegend = document.getElementById('aow-legend-rows');
+  const enochianLegend = document.getElementById('enochian-legend-rows');
   const classicLegend = document.getElementById('classic-legend-rows');
   if (sub) {
     if (mode === '2v2') sub.textContent = '2v2 Team Battle — With Queens';
     else if (mode === 'aow') sub.textContent = '4-King Chess — Standard Chess Pieces';
+    else if (mode === 'enochian') sub.textContent = 'Enochian Chess — Elemental Team Battle';
     else sub.textContent = 'Four Kings Chess — Online Multiplayer';
   }
   if (qRow) qRow.style.display = mode === '2v2' ? '' : 'none';
   if (aowLegend) aowLegend.style.display = mode === 'aow' ? '' : 'none';
-  if (classicLegend) classicLegend.style.display = mode === 'aow' ? 'none' : '';
+  if (enochianLegend) enochianLegend.style.display = mode === 'enochian' ? '' : 'none';
+  if (classicLegend) classicLegend.style.display = (mode === 'aow' || mode === 'enochian') ? 'none' : '';
 }
 updateModeUI('classic');
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const mode = tab.dataset.mode;
-    if ((mode === '2v2' || mode === 'aow') && !window.isPremium?.()) {
+    if ((mode === '2v2' || mode === 'aow' || mode === 'enochian') && !window.isPremium?.()) {
       window.showPaymentWall?.(); return;
     }
     document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
