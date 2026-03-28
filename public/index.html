@@ -60,36 +60,23 @@
 
 <!-- ==================== PAYMENT WALL OVERLAY ==================== -->
 <div id="payment-wall" class="overlay" style="display:none">
-  <div class="overlay-content payment-content">
+  <div class="overlay-content payment-content" style="max-width:460px">
     <button id="btn-close-payment" class="btn-close-overlay">✕</button>
-    <h2>Unlock Premium</h2>
-    <p class="payment-sub">Bots, 2v2, ranked games &amp; leaderboards</p>
-
-    <div class="payment-options">
-      <div class="payment-option">
-        <div class="payment-badge">Best value</div>
-        <h3>One-Time</h3>
-        <div class="payment-price">$5 <span>forever</span></div>
-        <ul class="payment-features">
-          <li>Play vs Bots</li>
-          <li>2v2 Team mode</li>
-          <li>Ranked matchmaking</li>
-          <li>Leaderboards</li>
-        </ul>
-        <button id="btn-pay-lifetime" class="btn btn-primary btn-lg">Get Premium — $5</button>
-      </div>
-
-      <div class="payment-option">
-        <h3>Monthly</h3>
-        <div class="payment-price">$3 <span>/mo</span></div>
-        <ul class="payment-features">
-          <li>Everything in One-Time</li>
-          <li>Priority matchmaking</li>
-          <li>Custom profile badge</li>
-          <li>Early access features</li>
-        </ul>
-        <button id="btn-pay-monthly" class="btn btn-secondary btn-lg">Subscribe Monthly</button>
-      </div>
+    <h2>Free Trial Ended</h2>
+    <p class="payment-sub">You've used all your free games for this mode. Join our community to stay updated on the full release!</p>
+    <div class="social-links-grid" style="margin-top:16px">
+      <a class="social-link" href="https://discord.gg/HU7zFR3CWU" target="_blank" rel="noopener noreferrer">
+        <span class="social-icon">💬</span>
+        <span>Discord — Join the Server</span>
+      </a>
+      <a class="social-link" href="https://youtube.com/@TBOG786" target="_blank" rel="noopener noreferrer">
+        <span class="social-icon">▶</span>
+        <span>YouTube — @TBOG786</span>
+      </a>
+      <a class="social-link" href="https://substack.com/@mufti963khrollo" target="_blank" rel="noopener noreferrer">
+        <span class="social-icon">📝</span>
+        <span>Substack — @mufti963khrollo</span>
+      </a>
     </div>
   </div>
 </div>
@@ -139,19 +126,11 @@
         <ul class="hero-features">
           <li>
             <span class="hf-icon">♟</span>
-            <div><strong>Classic Chaturaji</strong> — dice-driven 4-army battles from ancient India</div>
-          </li>
-          <li>
-            <span class="hf-icon">⚔</span>
-            <div><strong>2v2 Team Mode</strong> — allied armies, shared board, queen power-ups</div>
-          </li>
-          <li>
-            <span class="hf-icon">♛</span>
-            <div><strong>4-King Chess</strong> — standard pieces, no dice, 4-king throne rules</div>
+            <div><strong>Free for all (Chaturaji)</strong> — dice-driven 4-army battles from ancient India</div>
           </li>
           <li>
             <span class="hf-icon">✦</span>
-            <div><strong>Enochian Chess</strong> — elemental teams, frozen pieces, alibaba queen</div>
+            <div><strong>Teams (Enochian)</strong> — elemental team battle, frozen pieces, alibaba queen</div>
           </li>
         </ul>
         <div class="hero-mode-pills">
@@ -178,15 +157,30 @@
         <div class="lobby-card">
           <!-- Game mode selector -->
           <div class="mode-tabs">
-            <button class="mode-tab active" data-mode="classic">Classic</button>
-            <button class="mode-tab premium-tab" data-mode="2v2">2v2 Teams ⭐</button>
-            <button class="mode-tab premium-tab" data-mode="aow">4-King Chess ⭐</button>
-            <button class="mode-tab premium-tab" data-mode="enochian">Enochian ⭐</button>
+            <button class="mode-tab active" data-mode="classic">Free for all</button>
+            <button class="mode-tab" data-mode="enochian">Teams</button>
           </div>
 
           <div class="input-group" style="margin-top:14px">
             <label for="player-name">Your Name</label>
             <input type="text" id="player-name" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+          </div>
+
+          <!-- Customization -->
+          <div class="customize-section">
+            <div class="customize-row">
+              <span class="customize-label">Board</span>
+              <div class="customize-options">
+                <button class="customize-opt active" data-board="bw">B&amp;W</button>
+                <button class="customize-opt" data-board="green">Green</button>
+              </div>
+            </div>
+            <div class="customize-row">
+              <span class="customize-label">Dice</span>
+              <div class="customize-options">
+                <button class="customize-opt active" data-dice="classic">Classic 🎲</button>
+              </div>
+            </div>
           </div>
 
           <!-- R&G random color toggle -->
@@ -200,7 +194,7 @@
 
           <div class="lobby-actions">
             <button id="btn-play-bots" class="btn btn-primary btn-lg">
-              Play vs Bots ⭐
+              Play vs Bots
             </button>
             <button id="btn-create" class="btn btn-secondary btn-lg">
               <span class="btn-icon">+</span> Create Multiplayer Game
@@ -248,7 +242,7 @@
     <div id="waiting-players" class="waiting-players"></div>
     <p class="muted">Share the room code with friends. Game starts when 4 players join.</p>
     <div class="waiting-actions">
-      <button id="btn-start-bots" class="btn btn-secondary">Fill with Bots &amp; Start ⭐</button>
+      <button id="btn-start-bots" class="btn btn-secondary">Fill with Bots &amp; Start</button>
       <button id="btn-leave" class="btn btn-ghost">Leave</button>
     </div>
   </div>

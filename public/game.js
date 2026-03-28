@@ -43,7 +43,34 @@ const PIECE_ABBR = {
 
 let gameType = 'classic'; // 'classic' | '2v2' | 'aow' | 'enochian'
 let selectedMode = 'classic';
+let selectedBoard = localStorage.getItem('chaturaji_board') || 'bw';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
+
+// ==================== FREE TRIAL SYSTEM ====================
+const TRIAL_LIMITS = { classic_bot: 16, classic_mp: 8, enochian_bot: 12, enochian_mp: 6 };
+function getTrialCounts() {
+  try { return JSON.parse(localStorage.getItem('chaturaji_trials') || '{}'); } catch { return {}; }
+}
+function getTrialCount(mode, isBot) {
+  return getTrialCounts()[`${mode}_${isBot ? 'bot' : 'mp'}`] || 0;
+}
+function incrementTrial(mode, isBot) {
+  const counts = getTrialCounts();
+  const key = `${mode}_${isBot ? 'bot' : 'mp'}`;
+  counts[key] = (counts[key] || 0) + 1;
+  localStorage.setItem('chaturaji_trials', JSON.stringify(counts));
+}
+function canPlayTrial(mode, isBot) {
+  const key = `${mode}_${isBot ? 'bot' : 'mp'}`;
+  return getTrialCount(mode, isBot) < (TRIAL_LIMITS[key] || 16);
+}
+function showTrialEnded() {
+  document.getElementById('payment-wall').style.display = 'flex';
+}
+function getRemainingTrials(mode, isBot) {
+  const key = `${mode}_${isBot ? 'bot' : 'mp'}`;
+  return Math.max(0, (TRIAL_LIMITS[key] || 16) - getTrialCount(mode, isBot));
+}
 
 // ==================== PWA & SERVICE WORKER ====================
 if ('serviceWorker' in navigator) {
@@ -178,7 +205,7 @@ function joinGameByCode(code) {
 function getRandomColorPref() { return document.getElementById('random-color')?.checked ?? true; }
 
 document.getElementById('btn-play-bots').addEventListener('click', () => {
-  if (!window.isPremium?.()) return window.showPaymentWall?.();
+  if (!canPlayTrial(selectedMode, true)) return showTrialEnded();
   const name = document.getElementById('player-name').value.trim();
   if (!name) return showToast('Please enter your name');
   myName = name;
@@ -202,6 +229,7 @@ document.getElementById('btn-play-bots').addEventListener('click', () => {
 }, { passive: true });
 
 document.getElementById('btn-create').addEventListener('click', () => {
+  if (!canPlayTrial(selectedMode, false)) return showTrialEnded();
   const name = document.getElementById('player-name').value.trim();
   if (!name) return showToast('Please enter your name');
   myName = name;
@@ -227,6 +255,7 @@ document.getElementById('btn-join').addEventListener('click', () => {
   myName = name;
   haptic('light');
 
+  if (!canPlayTrial(selectedMode, false)) return showTrialEnded();
   socket.emit('join-game', { code, playerName: name, randomColor: getRandomColorPref() }, (res) => {
     if (res.error) return showToast(res.error);
     gameId = res.gameId; roomCode = res.code; myColor = res.color;
@@ -334,6 +363,8 @@ function renderGame() {
 function renderBoard() {
   const boardEl = document.getElementById('board');
   boardEl.innerHTML = '';
+  // Apply board theme
+  boardEl.className = 'board' + (selectedBoard ? ' theme-' + selectedBoard : '');
 
   // Create a document fragment for performance
   const frag = document.createDocumentFragment();
@@ -474,7 +505,8 @@ function renderDice() {
 }
 
 const TEAM_COLORS = { red: 'A', yellow: 'B', green: 'A', black: 'B' }; // 2v2 teams
-const ENOCHIAN_TEAM_COLORS = { red: 'A', yellow: 'A', green: 'B', black: 'B' }; // Enochian teams
+const ENOCHIAN_TEAM_COLORS = { red: 'A', yellow: 'A', green: 'B', black: 'B' };
+const ENOCHIAN_TEAM_LABELS = { red: 'Sulphur', yellow: 'Sulphur', green: 'Salt', black: 'Salt' };
 function renderPlayers() {
   const el = document.getElementById('game-players');
   const order = (gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYERS : PLAYERS;
@@ -486,7 +518,7 @@ function renderPlayers() {
     const count = countPieces(p.color);
     let teamBadge = '';
     if (gameType === '2v2') teamBadge = `<span class="team-badge team-${TEAM_COLORS[p.color]}">${TEAM_COLORS[p.color]}</span>`;
-    else if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_COLORS[p.color]}</span>`;
+    else if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_LABELS[p.color]}</span>`;
     return `
       <div class="player-row ${isElim ? 'eliminated' : ''} ${isFroz ? 'frozen' : ''} ${isCurrent ? 'current' : ''}">
         <span class="dot" style="background:${PLAYER_COLORS[p.color]}"></span>
@@ -714,6 +746,9 @@ socket.on('chat-message', addChatMessage);
 socket.on('game-started', (data) => {
   gameState = data.state; players = data.players;
   if (data.gameType) gameType = data.gameType;
+  // Track free trial usage
+  const isBotGame = players.some(p => p.name?.startsWith('Bot'));
+  incrementTrial(gameType === 'enochian' ? 'enochian' : 'classic', isBotGame);
   enterGame();
   addSystemMessage('Game started!');
   haptic('success');
@@ -724,7 +759,7 @@ socket.on('game-over', (data) => {
   const text = document.getElementById('winner-text');
   const stats = document.getElementById('winner-stats');
   // Handle 2v2 team win
-  const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black', ry: 'Red & Yellow', gb: 'Blue & Black' };
+  const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black', ry: 'Team Sulphur', gb: 'Team Salt' };
   const winnerLabel = data.winnerTeam
     ? `${teamNames[data.winnerTeam] || data.winnerTeam} Win!`
     : `${playerName(data.winner) || data.winner} Wins!`;
@@ -1053,29 +1088,44 @@ function updateModeUI(mode) {
   const enochianLegend = document.getElementById('enochian-legend-rows');
   const classicLegend = document.getElementById('classic-legend-rows');
   if (sub) {
-    if (mode === '2v2') sub.textContent = '2v2 Team Battle — With Queens';
-    else if (mode === 'aow') sub.textContent = '4-King Chess — Standard Chess Pieces';
-    else if (mode === 'enochian') sub.textContent = 'Enochian Chess — Elemental Team Battle';
-    else sub.textContent = 'Four Kings Chess — Online Multiplayer';
+    if (mode === 'enochian') sub.textContent = 'Teams (Enochian) — Elemental Team Battle';
+    else sub.textContent = 'Free for all (Chaturaji) — Online Multiplayer';
   }
-  if (qRow) qRow.style.display = mode === '2v2' ? '' : 'none';
+  if (qRow) qRow.style.display = 'none';
   if (aowLegend) aowLegend.style.display = mode === 'aow' ? '' : 'none';
   if (enochianLegend) enochianLegend.style.display = mode === 'enochian' ? '' : 'none';
-  if (classicLegend) classicLegend.style.display = (mode === 'aow' || mode === 'enochian') ? 'none' : '';
+  if (classicLegend) classicLegend.style.display = mode === 'enochian' ? 'none' : '';
 }
 updateModeUI('classic');
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const mode = tab.dataset.mode;
-    if ((mode === '2v2' || mode === 'aow' || mode === 'enochian') && !window.isPremium?.()) {
-      window.showPaymentWall?.(); return;
-    }
     document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     selectedMode = mode;
     updateModeUI(selectedMode);
   }, { passive: true });
 });
+
+// ---- BOARD THEME CUSTOMIZATION ----
+function applyBoardTheme(theme) {
+  selectedBoard = theme;
+  localStorage.setItem('chaturaji_board', theme);
+  document.querySelectorAll('.customize-opt[data-board]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.customize-opt[data-board="${theme}"]`)?.classList.add('active');
+  const boardEl = document.getElementById('board');
+  if (boardEl) boardEl.className = 'board theme-' + theme;
+}
+document.querySelectorAll('.customize-opt[data-board]').forEach(btn => {
+  btn.addEventListener('click', () => applyBoardTheme(btn.dataset.board), { passive: true });
+});
+// Apply saved theme on load
+if (selectedBoard) {
+  document.querySelector(`.customize-opt[data-board="${selectedBoard}"]`)?.classList.add('active');
+  document.querySelectorAll('.customize-opt[data-board]').forEach(b => {
+    if (b.dataset.board !== selectedBoard) b.classList.remove('active');
+  });
+}
 
 // Enter key on inputs
 document.getElementById('join-code').addEventListener('keydown', (e) => {

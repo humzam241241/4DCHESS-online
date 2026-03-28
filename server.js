@@ -371,12 +371,6 @@ io.on('connection', (socket) => {
   // ---- CREATE GAME ----
   socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic' }, callback) => {
     try {
-      // Premium check for 2v2 and AoW
-      if (gameType === '2v2' || gameType === 'aow' || gameType === 'enochian') {
-        const profile = await db.getProfile(socket.data.userId);
-        if (!isPremium(profile)) return callback({ error: 'Premium required for this game mode' });
-      }
-
       const gameId = uuidv4();
       const code = await generateRoomCode();
       const eng = getEngine(gameType);
@@ -583,10 +577,6 @@ io.on('connection', (socket) => {
     try {
       const { gameId, gameType } = socket.data || {};
       if (!gameId) return callback({ error: 'Not in a game' });
-
-      // Premium check for bots
-      const profile = await db.getProfile(socket.data.userId);
-      if (!isPremium(profile)) return callback({ error: 'Premium required for bot games' });
 
       const game = await db.getGame(gameId);
       const players = await db.getPlayers(gameId);

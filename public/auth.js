@@ -109,7 +109,6 @@ function showPaymentSuccess() {
 // ==================== LEADERBOARD ====================
 
 async function showLeaderboard() {
-  if (!isPremium()) { showPaymentWall(); return; }
   const overlay = document.getElementById('leaderboard-overlay');
   overlay.style.display = 'flex';
   const body = document.getElementById('leaderboard-body');
