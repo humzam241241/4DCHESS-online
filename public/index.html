@@ -199,7 +199,7 @@
             <button id="btn-create" class="btn btn-secondary btn-lg">
               <span class="btn-icon">+</span> Create Multiplayer Game
             </button>
-            <div class="divider"><span>or</span></div>
+            <div class="divider"><span>&#9765;</span></div>
             <div class="join-row">
               <input type="text" id="join-code" placeholder="Room code" maxlength="6" autocomplete="off" style="text-transform:uppercase">
               <button id="btn-join" class="btn btn-secondary">Join</button>
@@ -414,6 +414,63 @@
         <h3>Quick Reference</h3>
         <p>Chaturaji ("Four Kings") is an ancient Indian four-player chess variant dating back to the 7th century. Players roll dice to determine which piece type to move. Pieces include the King, Elephant (Rook), Horse (Knight), Boat (Bishop), and Pawn.</p>
       </div>
+
+      <h2 style="margin-top:32px;">How to Play Chaturaji</h2>
+
+      <h3>Setup</h3>
+      <p>The game is played on a standard 8&times;8 board with <strong>four players</strong>, each controlling an army of 8 pieces in one corner. The four armies are <strong style="color:#ef4444;">Red</strong> (bottom-left), <strong style="color:#eab308;">Yellow</strong> (bottom-right), <strong style="color:#22c55e;">Green</strong> (top-right), and <strong style="color:#64748b;">Black</strong> (top-left).</p>
+      <p>Each army consists of: <strong>1 King &#9818;</strong>, <strong>1 Elephant &#9820;</strong> (moves like a Rook), <strong>1 Horse &#9822;</strong> (moves like a Knight), <strong>1 Boat &#9821;</strong> (moves like a Bishop), and <strong>4 Pawns &#9823;</strong>.</p>
+
+      <h3>Turn Order &amp; Dice</h3>
+      <p>Play proceeds in turn order: Red &rarr; Yellow &rarr; Green &rarr; Black &rarr; Red &hellip;</p>
+      <p>At the start of each turn, <strong>two dice are rolled</strong>. The dice faces show piece types (King, Elephant, Horse, Boat) &mdash; not numbers. You <em>must</em> move a piece matching one of the rolled faces. If neither face matches a piece you still have on the board, you move a <strong>Pawn</strong> instead. If you have no legal moves at all, your turn is skipped.</p>
+
+      <h3>Piece Movements</h3>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0;">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9818;</td>
+          <td style="padding:8px;"><strong>King</strong></td>
+          <td style="padding:8px;">Moves one square in any direction (like standard chess).</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9820;</td>
+          <td style="padding:8px;"><strong>Elephant</strong></td>
+          <td style="padding:8px;">Moves any number of squares horizontally or vertically (like a Rook).</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9822;</td>
+          <td style="padding:8px;"><strong>Horse</strong></td>
+          <td style="padding:8px;">Moves in an L-shape (2+1 squares), jumping over pieces (like a Knight).</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9821;</td>
+          <td style="padding:8px;"><strong>Boat</strong></td>
+          <td style="padding:8px;">Moves exactly 2 squares diagonally, jumping over the first square. Cannot capture Kings.</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;font-size:1.3em;">&#9823;</td>
+          <td style="padding:8px;"><strong>Pawn</strong></td>
+          <td style="padding:8px;">Moves one square forward (away from its starting corner). Captures diagonally one square forward-left or forward-right.</td>
+        </tr>
+      </table>
+
+      <h3>Capturing</h3>
+      <p>You capture an opponent&rsquo;s piece by moving onto its square. All pieces capture the same way they move, except the <strong>Boat</strong> which cannot capture a King. Captured pieces are removed from the board.</p>
+
+      <h3>Pawn Promotion</h3>
+      <p>When a Pawn reaches the far edge of the board (the opposite side from where it started), it may <strong>promote</strong>. The Pawn is replaced by the first major piece (Elephant, Horse, or Boat) of its color that has been captured. If all major pieces are still alive, the Pawn waits at the edge until one is captured.</p>
+
+      <h3>Elimination &amp; Winning</h3>
+      <p>A player is <strong>eliminated</strong> when their King is captured &mdash; there is no &ldquo;check&rdquo; or &ldquo;checkmate,&rdquo; Kings can be taken directly. The last player with a King on the board <strong>wins</strong>.</p>
+
+      <h3>Strategy Tips</h3>
+      <ul style="margin:8px 0 0 20px;line-height:1.8;">
+        <li>Protect your King &mdash; it can be captured without warning.</li>
+        <li>The dice add randomness, but positioning still matters. Keep pieces where they can respond to multiple dice outcomes.</li>
+        <li>Eliminate weaker neighbors first to reduce threats.</li>
+        <li>Advance Pawns toward the far edge for promotion opportunities.</li>
+        <li>The Boat&rsquo;s diagonal jump makes it tricky to block &mdash; use it for surprise attacks.</li>
+      </ul>
     </div>
 
     <!-- SOCIAL / COMMUNITY -->

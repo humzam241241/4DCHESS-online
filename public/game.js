@@ -30,10 +30,10 @@ const AOW_PLAYER_NAMES = { yellow: 'Yellow', green: 'Blue', red: 'Red', black: '
 function playerName(color) {
   return ((gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYER_NAMES : PLAYER_NAMES)[color] || color;
 }
-// ♚=King 🐘=Elephant ♞=Horse/Knight ⛵=Boat ♟=Pawn 👑=Queen ♝=Bishop ♜=Rook
+// ♚=King ♜=Elephant/Rook ♞=Horse/Knight ♝=Boat/Bishop ♟=Pawn ♛=Queen
 const PIECE_ICONS = {
-  king: '\u265A', elephant: '\uD83D\uDC18', horse: '\u265E',
-  boat: '\u26F5', pawn: '\u265F', queen: '\uD83D\uDC51',
+  king: '\u265A', elephant: '\u265C', horse: '\u265E',
+  boat: '\u265D', pawn: '\u265F', queen: '\u265B',
   bishop: '\u265D', rook: '\u265C', knight: '\u265E'
 };
 const PIECE_ABBR = {
