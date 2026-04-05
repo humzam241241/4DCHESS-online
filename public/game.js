@@ -372,7 +372,9 @@ function renderBoard() {
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const cell = document.createElement('div');
-      cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      // Quadrant class for Enochian sub-boards: NW/NE/SE/SW
+      const quad = r < 4 ? (c < 4 ? 'quad-nw' : 'quad-ne') : (c < 4 ? 'quad-sw' : 'quad-se');
+      cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark') + ' ' + quad;
       cell.dataset.row = r;
       cell.dataset.col = c;
 
@@ -601,12 +603,33 @@ function onCellClick(row, col) {
 // ==================== DICE ====================
 document.getElementById('btn-roll').addEventListener('click', () => {
   haptic('medium');
-  socket.emit('roll-dice', (res) => {
-    if (res.error) { haptic('error'); return console.error(res.error); }
-    gameState = res.state;
-    animateDice();
-    renderGame();
-  });
+  // Roll-dice with a 3s timeout + one retry. Previously a dropped socket
+  // response (reconnect, packet loss) would leave the button hanging.
+  let settled = false;
+  const attempt = (isRetry) => {
+    const timer = setTimeout(() => {
+      if (settled) return;
+      if (!isRetry) {
+        attempt(true);
+      } else {
+        settled = true;
+        haptic('error');
+        console.error('roll-dice: no response after retry');
+      }
+    }, 3000);
+    socket.emit('roll-dice', (res) => {
+      if (settled) return;
+      clearTimeout(timer);
+      settled = true;
+      if (res && res.error) { haptic('error'); return console.error(res.error); }
+      if (res && res.state) {
+        gameState = res.state;
+        animateDice();
+        renderGame();
+      }
+    });
+  };
+  attempt(false);
 }, { passive: true });
 
 function animateDice() {
