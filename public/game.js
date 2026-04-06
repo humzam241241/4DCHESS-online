@@ -1111,13 +1111,14 @@ function updateModeUI(mode) {
   const enochianLegend = document.getElementById('enochian-legend-rows');
   const classicLegend = document.getElementById('classic-legend-rows');
   if (sub) {
-    if (mode === 'enochian') sub.textContent = 'Teams (Enochian) — Elemental Team Battle';
-    else sub.textContent = 'Free for all (Chaturaji) — Online Multiplayer';
+    if (mode === 'enochian') sub.textContent = 'Enochian Chess — Elemental Team Battle';
+    else if (mode === '2v2') sub.textContent = '2v2 Teams — Red+Green vs Yellow+Black';
+    else sub.textContent = 'Free for All (Chaturaji) — Online Multiplayer';
   }
-  if (qRow) qRow.style.display = 'none';
+  if (qRow) qRow.style.display = (mode === '2v2') ? '' : 'none';
   if (aowLegend) aowLegend.style.display = mode === 'aow' ? '' : 'none';
   if (enochianLegend) enochianLegend.style.display = mode === 'enochian' ? '' : 'none';
-  if (classicLegend) classicLegend.style.display = mode === 'enochian' ? 'none' : '';
+  if (classicLegend) classicLegend.style.display = (mode === 'enochian') ? 'none' : '';
 }
 updateModeUI('classic');
 document.querySelectorAll('.mode-tab').forEach(tab => {

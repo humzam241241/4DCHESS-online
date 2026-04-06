@@ -24,8 +24,8 @@
   --slate: #94a3b8;
   --danger: #dc2626;
   --success: #16a34a;
-  --board-light: #d4b896;
-  --board-dark: #8B0000;
+  --board-light: #dcc8a0;
+  --board-dark: #a01818;
   --radius: 10px;
   --radius-lg: 14px;
   --font-display: 'Cinzel', 'Palatino Linotype', Georgia, serif;
@@ -1056,13 +1056,13 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .history-pane h2 { font-family: var(--font-display); letter-spacing: 2px; }
 
 /* ==================== BOARD THEMES ==================== */
-.board.theme-bw .cell.light { background: #e0e0e0; }
-.board.theme-bw .cell.dark  { background: #3a3a3a; }
+.board.theme-bw .cell.light { background: #ebebeb; }
+.board.theme-bw .cell.dark  { background: #454545; }
 .board.theme-bw .cell.dark .coord-label { color: #ccc; }
 .board.theme-bw .cell.last-move { background: rgba(212,175,55,0.2) !important; }
 
-.board.theme-green .cell.light { background: #d0dcc4; }
-.board.theme-green .cell.dark  { background: #5c7a4e; }
+.board.theme-green .cell.light { background: #e4ecd8; }
+.board.theme-green .cell.dark  { background: #6e9060; }
 .board.theme-green .cell.dark .coord-label { color: #c4d8b8; }
 .board.theme-green .cell.last-move { background: rgba(212,175,55,0.2) !important; }
 
@@ -1071,38 +1071,38 @@ input[type="text"]::placeholder { color: var(--text-muted); }
    Quadrant assignment: Yellow/Air=NW, Blue/Water=NE, Red/Fire=SE, Black/Earth=SW */
 
 /* Air (Yellow dominant) */
-.board.theme-air .cell.light { background: #f5e59a; }
-.board.theme-air .cell.dark.quad-nw { background: #c9a618; }
-.board.theme-air .cell.dark.quad-ne { background: #7d9bb8; }
-.board.theme-air .cell.dark.quad-se { background: #c25a28; }
-.board.theme-air .cell.dark.quad-sw { background: #4a4128; }
+.board.theme-air .cell.light { background: #faf0b8; }
+.board.theme-air .cell.dark.quad-nw { background: #d4b830; }
+.board.theme-air .cell.dark.quad-ne { background: #96b4cc; }
+.board.theme-air .cell.dark.quad-se { background: #d47040; }
+.board.theme-air .cell.dark.quad-sw { background: #645838; }
 .board.theme-air .cell.dark .coord-label { color: #f5e59a; }
 .board.theme-air .cell.last-move { background: rgba(212,175,55,0.28) !important; }
 
 /* Water (Blue dominant) */
-.board.theme-water .cell.light { background: #bcd6ea; }
-.board.theme-water .cell.dark.quad-nw { background: #8c9a5a; }
-.board.theme-water .cell.dark.quad-ne { background: #2a5a85; }
-.board.theme-water .cell.dark.quad-se { background: #6a3545; }
-.board.theme-water .cell.dark.quad-sw { background: #1c2840; }
+.board.theme-water .cell.light { background: #d4e8f5; }
+.board.theme-water .cell.dark.quad-nw { background: #a0b070; }
+.board.theme-water .cell.dark.quad-ne { background: #3870a0; }
+.board.theme-water .cell.dark.quad-se { background: #884860; }
+.board.theme-water .cell.dark.quad-sw { background: #2a3858; }
 .board.theme-water .cell.dark .coord-label { color: #bcd6ea; }
 .board.theme-water .cell.last-move { background: rgba(212,175,55,0.28) !important; }
 
 /* Earth (Black/Olive dominant) */
-.board.theme-earth .cell.light { background: #a89876; }
-.board.theme-earth .cell.dark.quad-nw { background: #7e6a24; }
-.board.theme-earth .cell.dark.quad-ne { background: #2a3c58; }
-.board.theme-earth .cell.dark.quad-se { background: #5c2a1a; }
-.board.theme-earth .cell.dark.quad-sw { background: #1a1a1a; }
+.board.theme-earth .cell.light { background: #c4b898; }
+.board.theme-earth .cell.dark.quad-nw { background: #9a8438; }
+.board.theme-earth .cell.dark.quad-ne { background: #3e5470; }
+.board.theme-earth .cell.dark.quad-se { background: #784030; }
+.board.theme-earth .cell.dark.quad-sw { background: #2e2e2e; }
 .board.theme-earth .cell.dark .coord-label { color: #d4c4a0; }
 .board.theme-earth .cell.last-move { background: rgba(212,175,55,0.28) !important; }
 
 /* Fire (Red dominant) */
-.board.theme-fire .cell.light { background: #e7b18a; }
-.board.theme-fire .cell.dark.quad-nw { background: #c87820; }
-.board.theme-fire .cell.dark.quad-ne { background: #6a3a58; }
-.board.theme-fire .cell.dark.quad-se { background: #9c1f1f; }
-.board.theme-fire .cell.dark.quad-sw { background: #3a1e18; }
+.board.theme-fire .cell.light { background: #f0c8a0; }
+.board.theme-fire .cell.dark.quad-nw { background: #d89038; }
+.board.theme-fire .cell.dark.quad-ne { background: #845070; }
+.board.theme-fire .cell.dark.quad-se { background: #b83030; }
+.board.theme-fire .cell.dark.quad-sw { background: #503028; }
 .board.theme-fire .cell.dark .coord-label { color: #ffd7b8; }
 .board.theme-fire .cell.last-move { background: rgba(212,175,55,0.28) !important; }
 
