@@ -6,8 +6,6 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const Stripe = require('stripe');
 const engine = require('./src/engine');
-const engine2v2 = require('./src/engine2v2');
-const engineAoW = require('./src/engineAoW');
 const engineEnochian = require('./src/engineEnochian');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
@@ -15,8 +13,6 @@ const supabase = require('./src/supabase');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 function getEngine(gameType) {
-  if (gameType === '2v2') return engine2v2;
-  if (gameType === 'aow') return engineAoW;
   if (gameType === 'enochian') return engineEnochian;
   return engine;
 }
@@ -302,6 +298,179 @@ app.get('/api/admin/revenue', requireAdmin, async (req, res) => {
   res.json({ lifetimeTotal, monthlyTotal, grossTotal: lifetimeTotal + monthlyTotal, activeSubscriptions });
 });
 
+// ==================== MARKETPLACE API ====================
+
+// Browse marketplace items
+app.get('/api/marketplace', async (req, res) => {
+  try {
+    const { type, sort = 'created_at' } = req.query;
+    let query = supabase.from('marketplace_items').select('*, profiles!creator_id(display_name, avatar_url)')
+      .eq('status', 'approved');
+    if (type) query = query.eq('item_type', type);
+    if (sort === 'popular') query = query.order('downloads', { ascending: false });
+    else if (sort === 'rating') query = query.order('rating', { ascending: false });
+    else query = query.order('created_at', { ascending: false });
+    const { data, error } = await query.limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get single item
+app.get('/api/marketplace/:id', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('marketplace_items')
+      .select('*, profiles!creator_id(display_name, avatar_url)')
+      .eq('id', req.params.id).maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Item not found' });
+    // Get reviews
+    const { data: reviews } = await supabase.from('marketplace_reviews')
+      .select('*, profiles!user_id(display_name)').eq('item_id', req.params.id)
+      .order('created_at', { ascending: false }).limit(20);
+    res.json({ ...data, reviews: reviews || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create item (auth required)
+app.post('/api/marketplace', requireAuth, async (req, res) => {
+  try {
+    const { title, description, item_type, preview_url, asset_data, price } = req.body;
+    if (!title || !item_type) return res.status(400).json({ error: 'Title and item_type required' });
+    const { data, error } = await supabase.from('marketplace_items').insert({
+      creator_id: req.user.id, title, description, item_type,
+      preview_url, asset_data, price: price || 0,
+    }).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Purchase/download item
+app.post('/api/marketplace/:id/purchase', requireAuth, async (req, res) => {
+  try {
+    const item = await supabase.from('marketplace_items').select('*').eq('id', req.params.id).single();
+    if (item.error || !item.data) return res.status(404).json({ error: 'Item not found' });
+    // Check if already purchased
+    const { data: existing } = await supabase.from('marketplace_purchases')
+      .select('id').eq('user_id', req.user.id).eq('item_id', req.params.id).maybeSingle();
+    if (existing) return res.json({ already_owned: true, asset_data: item.data.asset_data });
+    // Deduct points if item has a price
+    if (item.data.price > 0) {
+      const profile = await db.getProfile(req.user.id);
+      if ((profile?.ranking_points || 0) < item.data.price) {
+        return res.status(400).json({ error: 'Not enough ranking points' });
+      }
+      await db.updateProfile(req.user.id, { ranking_points: profile.ranking_points - item.data.price });
+    }
+    await supabase.from('marketplace_purchases').insert({ user_id: req.user.id, item_id: req.params.id });
+    await supabase.from('marketplace_items').update({ downloads: (item.data.downloads || 0) + 1 }).eq('id', req.params.id);
+    res.json({ purchased: true, asset_data: item.data.asset_data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Review item
+app.post('/api/marketplace/:id/review', requireAuth, async (req, res) => {
+  try {
+    const { rating, review_text } = req.body;
+    if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating 1-5 required' });
+    const { error } = await supabase.from('marketplace_reviews').upsert({
+      user_id: req.user.id, item_id: req.params.id, rating, review_text,
+    }, { onConflict: 'user_id,item_id' });
+    if (error) throw error;
+    // Update average rating
+    const { data: reviews } = await supabase.from('marketplace_reviews').select('rating').eq('item_id', req.params.id);
+    if (reviews?.length) {
+      const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+      await supabase.from('marketplace_items').update({ rating: Math.round(avg * 100) / 100 }).eq('id', req.params.id);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== SOCIAL API ====================
+
+// Get user profile
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { data: profile } = await supabase.from('profiles')
+      .select('id, display_name, avatar_url, bio, ranking_points, followers_count, following_count')
+      .eq('id', req.params.id).maybeSingle();
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+    const { data: items } = await supabase.from('marketplace_items')
+      .select('*').eq('creator_id', req.params.id).eq('status', 'approved')
+      .order('created_at', { ascending: false }).limit(20);
+    res.json({ ...profile, items: items || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Follow user
+app.post('/api/follow/:userId', requireAuth, async (req, res) => {
+  try {
+    if (req.params.userId === req.user.id) return res.status(400).json({ error: 'Cannot follow yourself' });
+    const { error } = await supabase.from('follows').insert({
+      follower_id: req.user.id, following_id: req.params.userId,
+    });
+    if (error && error.code === '23505') return res.json({ already_following: true });
+    if (error) throw error;
+    // Update counts
+    await supabase.rpc('increment_followers', { target_user: req.params.userId });
+    await supabase.rpc('increment_following', { target_user: req.user.id });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Unfollow user
+app.delete('/api/follow/:userId', requireAuth, async (req, res) => {
+  try {
+    const { error } = await supabase.from('follows').delete()
+      .eq('follower_id', req.user.id).eq('following_id', req.params.userId);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Direct messages — list conversations
+app.get('/api/messages', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('direct_messages')
+      .select('*, sender:profiles!sender_id(display_name, avatar_url), receiver:profiles!receiver_id(display_name, avatar_url)')
+      .or(`sender_id.eq.${req.user.id},receiver_id.eq.${req.user.id}`)
+      .order('created_at', { ascending: false }).limit(100);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Send direct message
+app.post('/api/messages/:userId', requireAuth, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message || message.length > 2000) return res.status(400).json({ error: 'Message required (max 2000 chars)' });
+    const { error } = await supabase.from('direct_messages').insert({
+      sender_id: req.user.id, receiver_id: req.params.userId, message: message.trim(),
+    });
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Activity feed
+app.get('/api/feed', requireAuth, async (req, res) => {
+  try {
+    const { data: following } = await supabase.from('follows')
+      .select('following_id').eq('follower_id', req.user.id);
+    const followingIds = (following || []).map(f => f.following_id);
+    followingIds.push(req.user.id); // Include own activity
+    const { data, error } = await supabase.from('activity_feed')
+      .select('*, profiles!user_id(display_name, avatar_url)')
+      .in('user_id', followingIds)
+      .order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== STRIPE CHECKOUT ====================
 
 app.post('/api/create-checkout', requireAuth, async (req, res) => {
@@ -369,14 +538,17 @@ io.on('connection', (socket) => {
   console.log(`[+] ${socket.id} connected (user: ${socket.data.userId})`);
 
   // ---- CREATE GAME ----
-  socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic' }, callback) => {
+  socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic', preferredColors }, callback) => {
     try {
       const gameId = uuidv4();
       const code = await generateRoomCode();
       const eng = getEngine(gameType);
-      const color = randomColor
-        ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
-        : 'red';
+      // If player chose preferred colors for solo play, use the first one; otherwise random or default
+      const color = (preferredColors && preferredColors.length > 0)
+        ? preferredColors[0]
+        : randomColor
+          ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
+          : 'red';
 
       await db.createGameRecord(gameId, code, gameType);
       await db.addPlayer(gameId, color, playerName, socket.id, socket.data.userId);
@@ -386,7 +558,7 @@ io.on('connection', (socket) => {
       await db.updateGameState(gameId, state);
 
       socket.join(gameId);
-      socket.data = { ...socket.data, gameId, color, playerName, gameType };
+      socket.data = { ...socket.data, gameId, color, playerName, gameType, preferredColors: preferredColors || [] };
 
       callback({ gameId, code, color, gameType, state: sanitizeState(state), players: sortPlayers(await db.getPlayers(gameId)) });
       console.log(`[Game] ${playerName} created ${gameType} game ${code} (${gameId}) as ${color}`);
@@ -474,7 +646,7 @@ io.on('connection', (socket) => {
 
       const state = activeGames.get(gameId);
       if (!state) return callback({ error: 'Game not found' });
-      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      if (!isPlayerColor(socket.data, state.currentPlayer)) return callback({ error: 'Not your turn' });
 
       const eng = getEngine(gameType || state.gameType);
       const result = eng.rollDice(state);
@@ -499,7 +671,7 @@ io.on('connection', (socket) => {
     if (!state) return callback({ error: 'Game not found' });
 
     const piece = state.board[row][col];
-    if (!piece || piece.color !== color) return callback({ moves: [] });
+    if (!piece || !isPlayerColor(socket.data, piece.color)) return callback({ moves: [] });
 
     const eng = getEngine(gameType || state.gameType);
     const availTypes = eng.getAvailablePieceTypes(state);
@@ -516,7 +688,7 @@ io.on('connection', (socket) => {
 
       const state = activeGames.get(gameId);
       if (!state) return callback({ error: 'Game not found' });
-      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      if (!isPlayerColor(socket.data, state.currentPlayer)) return callback({ error: 'Not your turn' });
 
       const eng = getEngine(gameType || state.gameType);
       const result = eng.executeMove(state, fromRow, fromCol, toRow, toCol);
@@ -526,13 +698,33 @@ io.on('connection', (socket) => {
       await db.updateGameState(gameId, result.state);
       await db.recordMove(gameId, result.move);
 
-      if (result.state.winner) await db.setGameFinished(gameId, result.state.winner);
+      let rankingResult = null;
+      if (result.state.winner) {
+        await db.setGameFinished(gameId, result.state.winner);
+        rankingResult = await db.awardRankingPoints(gameId, result.state.placements).catch(e => { console.error('[ranking]', e); return null; });
+      }
 
       callback({ state: sanitizeState(result.state), move: result.move });
       socket.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
+      // Announce elimination with placement rank
+      if (result.move.captured?.type === 'king' && result.state.eliminationOrder) {
+        const elimColor = result.move.captured.color;
+        const elimCount = result.state.eliminationOrder.length;
+        const rankLabels = { 1: '4th Place', 2: '3rd Place (Bronze)', 3: '2nd Place (Silver)' };
+        const rankLabel = rankLabels[elimCount] || `Eliminated (#${elimCount})`;
+        io.to(gameId).emit('player-eliminated', { color: elimColor, rank: rankLabel });
+      }
+
       if (result.state.winner) {
-        io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
+        io.to(gameId).emit('game-over', {
+          winner: result.state.winner,
+          winnerTeam: result.state.winnerTeam || null,
+          placements: result.state.placements || null,
+          oddEvenCode: rankingResult?.oddEvenCode || null,
+          playerPoints: rankingResult?.playerPoints || null,
+          geomanticFigure: rankingResult?.geomanticFigure || null,
+        });
       } else {
         scheduleBotMove(gameId, result.state);
       }
@@ -547,7 +739,7 @@ io.on('connection', (socket) => {
 
       const state = activeGames.get(gameId);
       if (!state) return callback({ error: 'Game not found' });
-      if (state.currentPlayer !== color) return callback({ error: 'Not your turn' });
+      if (!isPlayerColor(socket.data, state.currentPlayer)) return callback({ error: 'Not your turn' });
 
       const eng = getEngine(gameType || state.gameType);
       const result = eng.skipTurn(state);
@@ -575,7 +767,7 @@ io.on('connection', (socket) => {
   // ---- START GAME (with bots) ----
   socket.on('start-game', async (callback) => {
     try {
-      const { gameId, gameType } = socket.data || {};
+      const { gameId, gameType, preferredColors } = socket.data || {};
       if (!gameId) return callback({ error: 'Not in a game' });
 
       const game = await db.getGame(gameId);
@@ -585,7 +777,17 @@ io.on('connection', (socket) => {
       const eng = getEngine(gameType || game.game_type);
       const state = activeGames.get(gameId);
 
+      // If player chose 2 colors, add the second color as a human-controlled slot
       const taken = players.map(p => p.color);
+      if (preferredColors && preferredColors.length === 2) {
+        const secondColor = preferredColors[1];
+        if (!taken.includes(secondColor)) {
+          // Add second color as the same player (same socket, same user)
+          await db.addPlayer(gameId, secondColor, players[0].name, socket.id, socket.data.userId);
+          taken.push(secondColor);
+        }
+      }
+
       const bots = eng.PLAYERS.filter(c => !taken.includes(c));
       for (const botColor of bots) {
         await db.addPlayer(gameId, botColor, `Bot (${eng.PLAYER_NAMES[botColor]})`, null, null);
@@ -625,6 +827,13 @@ async function isBot(gameId, color) {
   const players = await db.getPlayers(gameId);
   const player = players.find(p => p.color === color);
   return player && !player.socket_id && player.name.startsWith('Bot');
+}
+
+// Check if a color belongs to the given socket's player (for multi-color solo play)
+function isPlayerColor(socketData, color) {
+  if (socketData.color === color) return true;
+  if (socketData.preferredColors && socketData.preferredColors.includes(color)) return true;
+  return false;
 }
 
 function scheduleBotMove(gameId, state) {
@@ -706,7 +915,14 @@ async function makeBotMoves(gameId, state, eng = engine) {
 
   if (result.state.winner) {
     await db.setGameFinished(gameId, result.state.winner);
-    io.to(gameId).emit('game-over', { winner: result.state.winner, winnerTeam: result.state.winnerTeam || null });
+    const rankingResult = await db.awardRankingPoints(gameId, result.state.placements).catch(e => { console.error('[ranking]', e); return null; });
+    io.to(gameId).emit('game-over', {
+      winner: result.state.winner,
+      winnerTeam: result.state.winnerTeam || null,
+      placements: result.state.placements || null,
+      oddEvenCode: rankingResult?.oddEvenCode || null,
+      playerPoints: rankingResult?.playerPoints || null,
+    });
     return;
   }
 

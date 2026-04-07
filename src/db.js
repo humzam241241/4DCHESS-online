@@ -237,6 +237,80 @@ async function getLeaderboard() {
   return data || [];
 }
 
+// ==================== RANKING POINTS ====================
+
+const PLACEMENT_POINTS = { gold: 10, silver: 6, bronze: 3, fourth: 1 };
+
+// Geomantic Figures: 16 figures mapped by 4-digit odd(1)/even(2) code
+// Pattern: gold→silver→bronze→4th (top row to bottom row of figure)
+// Each row: 1 = single dot (odd), 2 = double dots (even)
+// Geomantic Figures mapped by 4-digit odd(1)/even(2) code
+// Each row of a geomantic figure: single dot=1(odd), double dots=2(even)
+// Our mapping: gold(row1/head) → silver(row2/neck) → bronze(row3/body) → fourth(row4/feet)
+// All 16 unique patterns from the traditional geomantic system
+const GEOMANTIC_FIGURES = {
+  '1111': { name: 'Via',              element: 'Water', planet: 'Moon',    sign: 'Cancer' },
+  '2222': { name: 'Populus',          element: 'Water', planet: 'Moon',    sign: 'Cancer' },
+  '2211': { name: 'Fortuna Major',    element: 'Fire',  planet: 'Sun',     sign: 'Leo' },
+  '1122': { name: 'Fortuna Minor',    element: 'Air',   planet: 'Sun',     sign: 'Leo' },
+  '2122': { name: 'Acquisitio',       element: 'Fire',  planet: 'Jupiter', sign: 'Sagittarius' },
+  '1211': { name: 'Tristitia',        element: 'Air',   planet: 'Saturn',  sign: 'Aquarius' },
+  '2212': { name: 'Laetitia',         element: 'Water', planet: 'Jupiter', sign: 'Pisces' },
+  '1121': { name: 'Carcer',           element: 'Earth', planet: 'Saturn',  sign: 'Capricorn' },
+  '1221': { name: 'Puer',             element: 'Fire',  planet: 'Mars',    sign: 'Aries' },
+  '2112': { name: 'Albus',            element: 'Air',   planet: 'Mercury', sign: 'Virgo' },
+  '1212': { name: 'Rubeus',           element: 'Water', planet: 'Mars',    sign: 'Scorpio' },
+  '2121': { name: 'Conjunctio',       element: 'Earth', planet: 'Mercury', sign: 'Gemini' },
+  '1222': { name: 'Caput Draconis',   element: 'Earth', planet: 'N Node',  sign: 'Benefics' },
+  '2221': { name: 'Cauda Draconis',   element: 'Fire',  planet: 'S Node',  sign: 'Malefics' },
+  '2111': { name: 'Amissio',          element: 'Earth', planet: 'Venus',   sign: 'Taurus' },
+  '1112': { name: 'Puella',           element: 'Air',   planet: 'Venus',   sign: 'Libra' },
+};
+
+function getGeomanticFigure(code) {
+  return GEOMANTIC_FIGURES[code] || null;
+}
+
+async function awardRankingPoints(gameId, placements) {
+  if (!placements) return { oddEvenCode: null, playerPoints: {} };
+  const players = await getPlayers(gameId);
+  const playerPoints = {}; // color -> new total points
+
+  for (const [rank, color] of Object.entries(placements)) {
+    if (!color || !PLACEMENT_POINTS[rank]) continue;
+    const player = players.find(p => p.color === color);
+    if (!player?.user_id) continue;
+
+    // Update placement on the player record
+    await supabase.from('players')
+      .update({ placement: rank })
+      .eq('game_id', gameId)
+      .eq('color', color);
+
+    // Award ranking points via increment
+    const profile = await getProfile(player.user_id);
+    if (profile) {
+      const newPoints = (profile.ranking_points || 0) + PLACEMENT_POINTS[rank];
+      await updateProfile(player.user_id, { ranking_points: newPoints });
+      playerPoints[color] = newPoints;
+    }
+  }
+
+  // Compute odd/even code: ordered gold -> silver -> bronze -> fourth
+  // Odd points = "1", Even points = "2"
+  const orderedRanks = ['gold', 'silver', 'bronze', 'fourth'];
+  let oddEvenCode = '';
+  for (const rank of orderedRanks) {
+    const color = placements[rank];
+    if (!color) { oddEvenCode += '0'; continue; }
+    const pts = playerPoints[color] ?? 0;
+    oddEvenCode += (pts % 2 === 1) ? '1' : '2';
+  }
+
+  const geomanticFigure = getGeomanticFigure(oddEvenCode);
+  return { oddEvenCode, playerPoints, geomanticFigure };
+}
+
 module.exports = {
   createGameRecord, getGame, getGameByCode, updateGameState,
   setGameStarted, setGameFinished, getRecentGames, getOpenGames,
@@ -245,4 +319,5 @@ module.exports = {
   addChatMessage, getChatMessages,
   getPlayerStats,
   getProfile, updateProfile, getOrCreateProfile, getLeaderboard,
+  awardRankingPoints,
 };

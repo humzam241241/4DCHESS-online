@@ -41,7 +41,7 @@ const PIECE_ABBR = {
   bishop: 'B', rook: 'R', knight: 'N'
 };
 
-let gameType = 'classic'; // 'classic' | '2v2' | 'aow' | 'enochian'
+let gameType = 'classic'; // 'classic' | 'enochian'
 let selectedMode = 'classic';
 let selectedBoard = localStorage.getItem('chaturaji_board') || 'bw';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
@@ -506,7 +506,6 @@ function renderDice() {
   }
 }
 
-const TEAM_COLORS = { red: 'A', yellow: 'B', green: 'A', black: 'B' }; // 2v2 teams
 const ENOCHIAN_TEAM_COLORS = { red: 'A', yellow: 'A', green: 'B', black: 'B' };
 const ENOCHIAN_TEAM_LABELS = { red: 'Sulphur', yellow: 'Sulphur', green: 'Salt', black: 'Salt' };
 function renderPlayers() {
@@ -519,8 +518,7 @@ function renderPlayers() {
     const isCurrent = gameState.currentPlayer === p.color && !gameState.winner;
     const count = countPieces(p.color);
     let teamBadge = '';
-    if (gameType === '2v2') teamBadge = `<span class="team-badge team-${TEAM_COLORS[p.color]}">${TEAM_COLORS[p.color]}</span>`;
-    else if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_LABELS[p.color]}</span>`;
+    if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_LABELS[p.color]}</span>`;
     return `
       <div class="player-row ${isElim ? 'eliminated' : ''} ${isFroz ? 'frozen' : ''} ${isCurrent ? 'current' : ''}">
         <span class="dot" style="background:${PLAYER_COLORS[p.color]}"></span>
@@ -781,14 +779,38 @@ socket.on('game-over', (data) => {
   const overlay = document.getElementById('game-over-overlay');
   const text = document.getElementById('winner-text');
   const stats = document.getElementById('winner-stats');
-  // Handle 2v2 team win
+  // Handle team win
   const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black', ry: 'Team Sulphur', gb: 'Team Salt' };
   const winnerLabel = data.winnerTeam
     ? `${teamNames[data.winnerTeam] || data.winnerTeam} Win!`
     : `${playerName(data.winner) || data.winner} Wins!`;
   text.textContent = winnerLabel;
   text.className = data.winnerTeam ? '' : `turn-${data.winner}`;
-  stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
+
+  // Show placements if available
+  const placements = data.placements;
+  if (placements) {
+    const medals = { gold: '\u{1F947}', silver: '\u{1F948}', bronze: '\u{1F949}', fourth: '4th' };
+    let placementHTML = '<div style="margin:12px 0;text-align:left;">';
+    for (const [rank, color] of Object.entries(placements)) {
+      if (!color) continue;
+      const medal = medals[rank] || rank;
+      const isMe = color === myColor;
+      const highlight = isMe ? 'font-weight:bold;color:#D4AF37;font-size:1.1em;' : '';
+      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()}${isMe ? ' (YOU)' : ''}</div>`;
+    }
+    placementHTML += '</div>';
+    // Show personal placement prominently
+    const myRank = Object.entries(placements).find(([_, c]) => c === myColor);
+    if (myRank) {
+      const [rank] = myRank;
+      const medal = medals[rank] || rank;
+      text.innerHTML = `<div style="font-size:2em;margin-bottom:4px;">${medal}</div>YOU GOT ${rank.toUpperCase()}!`;
+    }
+    stats.innerHTML = placementHTML + `<div style="color:#a09880;margin-top:8px;">Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves</div>`;
+  } else {
+    stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
+  }
   overlay.classList.add('show');
   renderGame();
   haptic('heavy');
@@ -1112,10 +1134,9 @@ function updateModeUI(mode) {
   const classicLegend = document.getElementById('classic-legend-rows');
   if (sub) {
     if (mode === 'enochian') sub.textContent = 'Enochian Chess — Elemental Team Battle';
-    else if (mode === '2v2') sub.textContent = '2v2 Teams — Red+Green vs Yellow+Black';
     else sub.textContent = 'Free for All (Chaturaji) — Online Multiplayer';
   }
-  if (qRow) qRow.style.display = (mode === '2v2') ? '' : 'none';
+  if (qRow) qRow.style.display = 'none';
   if (aowLegend) aowLegend.style.display = mode === 'aow' ? '' : 'none';
   if (enochianLegend) enochianLegend.style.display = mode === 'enochian' ? '' : 'none';
   if (classicLegend) classicLegend.style.display = (mode === 'enochian') ? 'none' : '';

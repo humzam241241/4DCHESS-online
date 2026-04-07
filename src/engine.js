@@ -57,9 +57,11 @@ function createGame() {
     board,
     currentPlayer: 'red',
     eliminated: [],
+    eliminationOrder: [],  // tracks order of elimination for placements
     dice: null,       // [face1, face2] or null
     diceUsed: [false, false],
     winner: null,
+    placements: null,  // { gold, silver, bronze, fourth } — set on game over
     moveHistory: [],  // [{player, piece, from, to, captured, dice, turn}]
     turnNumber: 1,
     phase: 'roll',    // 'roll' | 'move' | 'finished'
@@ -321,6 +323,8 @@ function skipTurn(state) {
 function eliminatePlayer(state, color) {
   if (!state.eliminated.includes(color)) {
     state.eliminated.push(color);
+    if (!state.eliminationOrder) state.eliminationOrder = [];
+    state.eliminationOrder.push(color);
   }
   // Remove all pieces
   for (let r = 0; r < 8; r++)
@@ -332,6 +336,14 @@ function eliminatePlayer(state, color) {
   if (alive.length === 1) {
     state.winner = alive[0];
     state.phase = 'finished';
+    // Compute placements: gold=winner, silver=last eliminated, bronze=2nd eliminated, fourth=1st eliminated
+    const elimOrder = state.eliminationOrder || [];
+    state.placements = {
+      gold: alive[0],
+      silver: elimOrder.length >= 1 ? elimOrder[elimOrder.length - 1] : null,
+      bronze: elimOrder.length >= 2 ? elimOrder[elimOrder.length - 2] : null,
+      fourth: elimOrder.length >= 3 ? elimOrder[elimOrder.length - 3] : null,
+    };
   }
 }
 

@@ -86,8 +86,10 @@ function createGame() {
     currentPlayer: 'yellow',
     frozen: [],        // players whose king was captured; pieces stay as blocking terrain
     eliminated: [],    // kept for interface compatibility
+    eliminationOrder: [],  // tracks order of freezing for placements
     winner: null,
     winnerTeam: null,  // 'ry' or 'gb'
+    placements: null,  // { gold, silver, bronze, fourth } — set on game over
     moveHistory: [],
     turnNumber: 1,
     phase: 'move',     // always 'move' — no dice in Enochian
@@ -306,6 +308,8 @@ function checkPawnPromotion(state, row, col) {
 function freezePlayer(state, color) {
   if (state.frozen.includes(color)) return;
   state.frozen.push(color);
+  if (!state.eliminationOrder) state.eliminationOrder = [];
+  state.eliminationOrder.push(color);
   // Pieces stay on the board as blocking terrain — no removal
   checkTeamWin(state);
 }
@@ -316,14 +320,30 @@ function checkTeamWin(state) {
   const team0AllFrozen = TEAMS[0].every(c => state.frozen.includes(c));
   const team1AllFrozen = TEAMS[1].every(c => state.frozen.includes(c));
 
-  if (team0AllFrozen) {
-    state.winnerTeam = 'gb';
-    state.winner = 'gb';
+  if (team0AllFrozen || team1AllFrozen) {
+    const winnerTeamKey = team0AllFrozen ? 'gb' : 'ry';
+    const winnerTeam = team0AllFrozen ? TEAMS[1] : TEAMS[0];
+    const loserTeam = team0AllFrozen ? TEAMS[0] : TEAMS[1];
+    state.winnerTeam = winnerTeamKey;
+    state.winner = winnerTeamKey;
     state.phase = 'finished';
-  } else if (team1AllFrozen) {
-    state.winnerTeam = 'ry';
-    state.winner = 'ry';
-    state.phase = 'finished';
+
+    // Placements for team games: winners get gold/silver, losers get bronze/fourth
+    // Order within teams: first frozen player ranks lower
+    const elimOrder = state.eliminationOrder || [];
+    const loserFirst = loserTeam.find(c => elimOrder.indexOf(c) < elimOrder.indexOf(loserTeam.find(c2 => c2 !== c)));
+    const loserSecond = loserTeam.find(c => c !== loserFirst);
+    // Winners: the one NOT frozen (or frozen last) gets gold
+    const winnerFrozen = winnerTeam.filter(c => state.frozen.includes(c));
+    const winnerAlive = winnerTeam.filter(c => !state.frozen.includes(c));
+    const goldPlayer = winnerAlive[0] || winnerTeam[0];
+    const silverPlayer = winnerTeam.find(c => c !== goldPlayer);
+    state.placements = {
+      gold: goldPlayer,
+      silver: silverPlayer,
+      bronze: loserSecond || loserTeam[1],
+      fourth: loserFirst || loserTeam[0],
+    };
   }
 }
 
