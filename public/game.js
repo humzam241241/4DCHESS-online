@@ -258,6 +258,28 @@ document.getElementById('btn-join').addEventListener('click', () => {
   if (!canPlayTrial(selectedMode, false)) return showTrialEnded();
   socket.emit('join-game', { code, playerName: name, randomColor: getRandomColorPref() }, (res) => {
     if (res.error) return showToast(res.error);
+
+    // If game is full but has bots, offer takeover
+    if (res.canTakeOver && res.bots && res.bots.length > 0) {
+      const botChoice = prompt(
+        'This game has bot players. Enter a color to take over:\n' +
+        res.bots.map(b => `  • ${b.color}`).join('\n') +
+        '\n\nType a color name (e.g. "red") or cancel:'
+      );
+      if (!botChoice) return;
+      const chosenColor = botChoice.trim().toLowerCase();
+      if (!res.bots.find(b => b.color === chosenColor)) return showToast('Invalid color');
+      socket.emit('join-game', { code, playerName: name, randomColor: false, takeOverBot: chosenColor }, (res2) => {
+        if (res2.error) return showToast(res2.error);
+        finishJoinGame(res2);
+      });
+      return;
+    }
+
+    finishJoinGame(res);
+  });
+
+  function finishJoinGame(res) {
     gameId = res.gameId; roomCode = res.code; myColor = res.color;
     gameState = res.state; players = res.players;
     if (res.gameType) gameType = res.gameType;
@@ -271,7 +293,7 @@ document.getElementById('btn-join').addEventListener('click', () => {
       showWaitingRoom();
     }
     haptic('success');
-  });
+  }
 }, { passive: true });
 
 // ==================== WAITING ROOM ====================

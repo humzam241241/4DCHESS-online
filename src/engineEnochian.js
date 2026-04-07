@@ -462,6 +462,15 @@ function getGameInfo(state) {
   };
 }
 
+// Enochian pawns have typed promotion — no player choice needed
+function applyPromotion(state, chosenType) {
+  if (!state.pendingPromotion) return { error: 'No pending promotion' };
+  const { row, col, color } = state.pendingPromotion;
+  state.board[row][col] = { type: chosenType, color };
+  delete state.pendingPromotion;
+  return { promotedTo: chosenType };
+}
+
 module.exports = {
   PLAYERS,
   PLAYER_NAMES,
@@ -472,6 +481,7 @@ module.exports = {
   getAvailablePieceTypes,
   getValidMoves,
   executeMove,
+  applyPromotion,
   skipTurn,
   getGameInfo,
   hasAnyValidMove,

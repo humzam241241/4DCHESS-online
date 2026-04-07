@@ -206,25 +206,57 @@ function addPawnMoves(board, row, col, piece, moves) {
   }
 }
 
-// When a pawn reaches the far edge, resurrect the first dead major piece (elephant > horse > boat)
+// Check if a pawn is at the far edge and eligible for promotion
+function isPawnAtFarEnd(state, row, col) {
+  const piece = state.board[row][col];
+  if (!piece || piece.type !== 'pawn') return false;
+  const dir = INITIAL_SETUP[piece.color].pawnDir;
+  if (dir[0] === -1 && row === 0) return true;
+  if (dir[0] === 1  && row === 7) return true;
+  if (dir[1] === -1 && col === 0) return true;
+  if (dir[1] === 1  && col === 7) return true;
+  return false;
+}
+
+// Get available promotion types for a pawn (dead major pieces)
+function getPromotionOptions(state, color) {
+  const options = [];
+  for (const type of ['elephant', 'horse', 'boat']) {
+    if (!hasPiece(state.board, color, type)) {
+      options.push(type);
+    }
+  }
+  return options;
+}
+
+// When a pawn reaches the far edge, check for pending promotion
+// Returns 'pending' if player needs to choose, or the promoted type if auto-promoted
 function checkPawnPromotion(state, row, col) {
   const piece = state.board[row][col];
   if (!piece || piece.type !== 'pawn') return null;
+  if (!isPawnAtFarEnd(state, row, col)) return null;
   const color = piece.color;
-  const dir = INITIAL_SETUP[color].pawnDir;
-  let atFarEnd = false;
-  if (dir[0] === -1 && row === 0) atFarEnd = true;  // Red moves north
-  if (dir[0] === 1  && row === 7) atFarEnd = true;  // Green moves south
-  if (dir[1] === -1 && col === 0) atFarEnd = true;  // Yellow moves west
-  if (dir[1] === 1  && col === 7) atFarEnd = true;  // Black moves east
-  if (!atFarEnd) return null;
-  for (const type of ['elephant', 'horse', 'boat']) {
-    if (!hasPiece(state.board, color, type)) {
-      state.board[row][col] = { type, color };
-      return type;
-    }
+  const options = getPromotionOptions(state, color);
+  if (options.length === 0) return null; // All major pieces still alive — pawn waits
+  if (options.length === 1) {
+    // Only one option — auto-promote
+    state.board[row][col] = { type: options[0], color };
+    return options[0];
   }
-  return null; // All major pieces still alive — pawn waits at far edge
+  // Multiple options — set pending promotion for player to choose
+  state.pendingPromotion = { row, col, color, options };
+  return 'pending';
+}
+
+// Apply player's chosen promotion type
+function applyPromotion(state, chosenType) {
+  if (!state.pendingPromotion) return { error: 'No pending promotion' };
+  const { row, col, color, options } = state.pendingPromotion;
+  if (!options.includes(chosenType)) return { error: 'Invalid promotion choice' };
+  state.board[row][col] = { type: chosenType, color };
+  const result = chosenType;
+  delete state.pendingPromotion;
+  return { promotedTo: result };
 }
 
 function hasAnyValidMove(state) {
@@ -292,11 +324,13 @@ function executeMove(state, fromRow, fromCol, toRow, toCol) {
   };
   next.moveHistory.push(moveRecord);
 
-  // Check if turn is over
-  if (next.diceUsed[0] && next.diceUsed[1]) {
-    advanceTurn(next);
-  } else if (!hasAnyValidMove(next)) {
-    advanceTurn(next);
+  // Don't advance turn if waiting for promotion choice
+  if (!next.pendingPromotion) {
+    if (next.diceUsed[0] && next.diceUsed[1]) {
+      advanceTurn(next);
+    } else if (!hasAnyValidMove(next)) {
+      advanceTurn(next);
+    }
   }
 
   return { state: next, move: moveRecord };
@@ -395,4 +429,6 @@ module.exports = {
   skipTurn,
   getGameInfo,
   hasAnyValidMove,
+  applyPromotion,
+  getPromotionOptions,
 };

@@ -566,25 +566,58 @@ io.on('connection', (socket) => {
   });
 
   // ---- JOIN GAME ----
-  socket.on('join-game', async ({ code, playerName, randomColor }, callback) => {
+  socket.on('join-game', async ({ code, playerName, randomColor, takeOverBot }, callback) => {
     try {
       const game = await db.getGameByCode(code.toUpperCase());
       if (!game) return callback({ error: 'Game not found' });
       if (game.status === 'finished') return callback({ error: 'Game is already finished' });
 
       const players = await db.getPlayers(game.id);
-      if (players.length >= 4) return callback({ error: 'Game is full' });
-
       const gameType = game.game_type || 'classic';
       const eng = getEngine(gameType);
 
-      const taken = players.map(p => p.color);
-      const available = eng.PLAYERS.filter(c => !taken.includes(c));
-      const color = randomColor
-        ? available[Math.floor(Math.random() * available.length)]
-        : available[0];
+      // Check for bot slots that can be taken over
+      const botPlayers = players.filter(p => !p.socket_id && p.name.startsWith('Bot'));
+      const humanPlayers = players.filter(p => p.socket_id || !p.name.startsWith('Bot'));
 
-      await db.addPlayer(game.id, color, playerName, socket.id, socket.data.userId);
+      let color;
+
+      if (players.length >= 4 && botPlayers.length > 0) {
+        // Game is full but has bots — offer takeover or auto-take if requested
+        if (!takeOverBot) {
+          // Send back bot info so client can ask user which bot to replace
+          return callback({
+            canTakeOver: true,
+            bots: botPlayers.map(b => ({ color: b.color, name: b.name })),
+            gameId: game.id,
+            code: game.code,
+            gameType,
+          });
+        }
+        // takeOverBot is the color of the bot to replace
+        const botToReplace = botPlayers.find(b => b.color === takeOverBot);
+        if (!botToReplace) return callback({ error: 'That bot slot is no longer available' });
+        color = botToReplace.color;
+        // Replace the bot: update the player record with the new human's info
+        await db.updatePlayerSocket(game.id, color, socket.id, true);
+        await supabase.from('players').update({
+          name: playerName,
+          user_id: socket.data.userId,
+          socket_id: socket.id,
+          connected: true,
+        }).eq('game_id', game.id).eq('color', color);
+      } else if (players.length >= 4) {
+        return callback({ error: 'Game is full' });
+      } else {
+        // Normal join — open slot available
+        const taken = players.map(p => p.color);
+        const available = eng.PLAYERS.filter(c => !taken.includes(c));
+        color = randomColor
+          ? available[Math.floor(Math.random() * available.length)]
+          : available[0];
+        await db.addPlayer(game.id, color, playerName, socket.id, socket.data.userId);
+      }
+
       socket.join(game.id);
       socket.data = { ...socket.data, gameId: game.id, color, playerName, gameType };
 
@@ -707,6 +740,33 @@ io.on('connection', (socket) => {
       callback({ state: sanitizeState(result.state), move: result.move });
       socket.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
+      // If there's a pending promotion, notify the player
+      if (result.state.pendingPromotion) {
+        io.to(gameId).emit('promotion-needed', {
+          color: result.state.pendingPromotion.color,
+          row: result.state.pendingPromotion.row,
+          col: result.state.pendingPromotion.col,
+          options: result.state.pendingPromotion.options,
+        });
+        // If it's a bot's pawn, auto-promote to the best piece
+        if (await isBot(gameId, result.state.pendingPromotion.color)) {
+          const bestType = result.state.pendingPromotion.options[0]; // elephant > horse > boat
+          const eng = getEngine(gameType || state.gameType);
+          const promoResult = eng.applyPromotion(result.state, bestType);
+          if (!promoResult.error) {
+            activeGames.set(gameId, result.state);
+            await db.updateGameState(gameId, result.state);
+            io.to(gameId).emit('promotion-applied', {
+              color: result.state.currentPlayer,
+              row: result.state.pendingPromotion?.row,
+              col: result.state.pendingPromotion?.col,
+              promotedTo: promoResult.promotedTo,
+              state: sanitizeState(result.state),
+            });
+          }
+        }
+      }
+
       // Announce elimination with placement rank
       if (result.move.captured?.type === 'king' && result.state.eliminationOrder) {
         const elimColor = result.move.captured.color;
@@ -753,6 +813,40 @@ io.on('connection', (socket) => {
 
       scheduleBotMove(gameId, result.state);
     } catch (e) { console.error('[skip-turn]', e); callback({ error: 'Server error' }); }
+  });
+
+  // ---- PROMOTE PAWN ----
+  socket.on('promote-pawn', async ({ chosenType }, callback) => {
+    try {
+      const { gameId, gameType } = socket.data || {};
+      if (!gameId) return callback({ error: 'Not in a game' });
+
+      const state = activeGames.get(gameId);
+      if (!state) return callback({ error: 'Game not found' });
+      if (!state.pendingPromotion) return callback({ error: 'No pending promotion' });
+      if (!isPlayerColor(socket.data, state.pendingPromotion.color)) return callback({ error: 'Not your promotion' });
+
+      const eng = getEngine(gameType || state.gameType);
+      const promoResult = eng.applyPromotion(state, chosenType);
+      if (promoResult.error) return callback({ error: promoResult.error });
+
+      // Now check if turn should advance (dice both used or no moves left)
+      if (state.diceUsed && state.diceUsed[0] && state.diceUsed[1]) {
+        eng.skipTurn && eng.skipTurn(state); // advance turn
+      }
+
+      activeGames.set(gameId, state);
+      await db.updateGameState(gameId, state);
+
+      callback({ state: sanitizeState(state), promotedTo: promoResult.promotedTo });
+      io.to(gameId).emit('promotion-applied', {
+        color: state.currentPlayer,
+        promotedTo: promoResult.promotedTo,
+        state: sanitizeState(state),
+      });
+
+      scheduleBotMove(gameId, state);
+    } catch (e) { console.error('[promote-pawn]', e); callback({ error: 'Server error' }); }
   });
 
   // ---- CHAT ----
