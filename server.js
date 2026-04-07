@@ -544,11 +544,12 @@ io.on('connection', (socket) => {
       const code = await generateRoomCode();
       const eng = getEngine(gameType);
       // If player chose preferred colors for solo play, use the first one; otherwise random or default
+      // Use eng.PLAYERS[0] instead of hardcoded 'red' — Enochian starts with 'yellow'
       const color = (preferredColors && preferredColors.length > 0)
         ? preferredColors[0]
         : randomColor
           ? eng.PLAYERS[Math.floor(Math.random() * eng.PLAYERS.length)]
-          : 'red';
+          : eng.PLAYERS[0];
 
       await db.createGameRecord(gameId, code, gameType);
       await db.addPlayer(gameId, color, playerName, socket.id, socket.data.userId);

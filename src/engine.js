@@ -75,6 +75,7 @@ function cloneState(state) {
 // ==================== DICE ====================
 
 function rollDice(state) {
+  if (state.pendingPromotion) return { error: 'Resolve pawn promotion first' };
   if (state.phase !== 'roll' || state.winner) return { error: 'Cannot roll now' };
   const next = cloneState(state);
   const d1 = DIE_FACES[Math.floor(Math.random() * 4)];
@@ -273,6 +274,7 @@ function hasAnyValidMove(state) {
 // ==================== EXECUTE MOVE ====================
 
 function executeMove(state, fromRow, fromCol, toRow, toCol) {
+  if (state.pendingPromotion) return { error: 'Resolve pawn promotion first' };
   if (state.phase !== 'move' || state.winner) return { error: 'Cannot move now' };
 
   const piece = state.board[fromRow][fromCol];
@@ -348,6 +350,7 @@ function useDie(state, pieceType) {
 }
 
 function skipTurn(state) {
+  if (state.pendingPromotion) return { error: 'Resolve pawn promotion first' };
   if (state.phase !== 'move' || state.winner) return { error: 'Cannot skip now' };
   const next = cloneState(state);
   advanceTurn(next);
