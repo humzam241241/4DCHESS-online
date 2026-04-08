@@ -88,12 +88,37 @@
     <h2>Leaderboard</h2>
     <table class="leaderboard-table">
       <thead>
-        <tr><th>#</th><th>Player</th><th>Wins</th><th>Win Rate</th></tr>
+        <tr><th>#</th><th>Player</th><th>Played</th><th>Wins</th><th>Win Rate</th><th>Points</th></tr>
       </thead>
       <tbody id="leaderboard-body">
-        <tr><td colspan="4" style="text-align:center;padding:20px">Loading...</td></tr>
+        <tr><td colspan="6" style="text-align:center;padding:20px">Loading...</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- ==================== MARKETPLACE OVERLAY ==================== -->
+<div id="marketplace-overlay" class="overlay" style="display:none">
+  <div class="overlay-content marketplace-content">
+    <button id="btn-close-marketplace" class="btn-close-overlay">✕</button>
+    <h2>Marketplace</h2>
+    <p class="marketplace-sub">Browse and collect board themes, piece skins, and more. Spend your ranking points!</p>
+
+    <div class="marketplace-filters">
+      <button class="mp-filter active" data-type="">All</button>
+      <button class="mp-filter" data-type="board_theme">Boards</button>
+      <button class="mp-filter" data-type="piece_skin">Pieces</button>
+      <button class="mp-filter" data-type="board_set">Sets</button>
+      <select id="mp-sort" class="mp-sort-select">
+        <option value="created_at">Newest</option>
+        <option value="popular">Most Popular</option>
+        <option value="rating">Top Rated</option>
+      </select>
+    </div>
+
+    <div id="marketplace-grid" class="marketplace-grid">
+      <p class="muted" style="grid-column:1/-1;text-align:center;padding:30px">Loading...</p>
+    </div>
   </div>
 </div>
 
@@ -112,6 +137,7 @@
         <div class="user-actions">
           <button id="btn-history" class="btn btn-ghost btn-sm">History &amp; Rules</button>
           <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
+          <button id="btn-marketplace" class="btn btn-ghost btn-sm">Marketplace</button>
           <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">⚙ Admin</button>
           <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
@@ -280,6 +306,7 @@
 
       <div class="panel">
         <h3>Room: <span id="game-room-code" class="highlight"></span></h3>
+        <button id="btn-quit-game" class="btn btn-danger btn-sm" style="margin-top:8px;width:100%">Quit Game</button>
       </div>
 
       <div class="panel piece-legend">
@@ -359,6 +386,7 @@
   <div class="overlay-content">
     <h2 id="winner-text"></h2>
     <p id="winner-stats"></p>
+    <div id="fortune-display" class="fortune-display" style="display:none"></div>
     <div class="overlay-actions">
       <button id="btn-replay" class="btn btn-secondary">Watch Replay</button>
       <button id="btn-back-lobby" class="btn btn-primary">Back to Lobby</button>

@@ -1009,11 +1009,72 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 }
 .leaderboard-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .leaderboard-table tr:last-child td { border-bottom: none; }
-.lb-rank  { width: 40px; color: var(--text-muted); font-weight: 700; }
-.lb-name  { display: flex; align-items: center; gap: 10px; }
-.lb-avatar{ width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
-.lb-wins  { font-weight: 700; color: var(--accent); }
-.lb-rate  { color: var(--text-muted); }
+.lb-rank   { width: 40px; color: var(--text-muted); font-weight: 700; font-size: 1.1em; }
+.lb-name   { display: flex; align-items: center; gap: 10px; }
+.lb-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+.lb-played { color: var(--text-dim); }
+.lb-wins   { font-weight: 700; color: var(--accent); }
+.lb-rate   { color: var(--text-muted); }
+.lb-points { font-weight: 700; color: #a78bfa; }
+
+/* ==================== MARKETPLACE ==================== */
+.marketplace-content {
+  max-width: 720px; width: 100%; padding: 32px 28px;
+  position: relative; max-height: 85vh; overflow-y: auto;
+}
+.marketplace-content h2 { margin-bottom: 4px; font-family: var(--font-display); letter-spacing: 3px; }
+.marketplace-sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px; }
+.marketplace-filters {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.mp-filter {
+  padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim); font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; transition: all 0.2s var(--ease-out);
+}
+.mp-filter.active { background: var(--purple-soft); border-color: var(--accent); color: var(--accent); }
+.mp-filter:not(.active):hover { border-color: rgba(212,175,55,0.3); }
+.mp-sort-select {
+  margin-left: auto; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-secondary); color: var(--text-primary); font-size: 0.8rem;
+  cursor: pointer;
+}
+.marketplace-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.mp-card {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--bg-secondary); cursor: pointer;
+  transition: transform 0.2s var(--ease-out), border-color 0.2s;
+}
+.mp-card:hover { transform: translateY(-2px); border-color: rgba(212,175,55,0.4); }
+.mp-preview {
+  height: 120px; position: relative; display: flex; align-items: flex-start; justify-content: flex-end;
+  padding: 8px;
+}
+.mp-type-badge {
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,0.6); color: #fff;
+}
+.mp-info { padding: 12px; }
+.mp-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+.mp-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.mp-creator { font-size: 0.75rem; color: var(--text-muted); }
+.mp-rating { font-size: 0.8rem; color: #eab308; letter-spacing: 1px; }
+.mp-bottom { display: flex; justify-content: space-between; align-items: center; }
+.mp-price {
+  font-size: 0.8rem; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+}
+.mp-price.free { background: rgba(34,197,94,0.15); color: #22c55e; }
+.mp-price.paid { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.mp-downloads { font-size: 0.7rem; color: var(--text-dim); }
+
+@media (max-width: 600px) {
+  .marketplace-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .mp-preview { height: 90px; }
+  .marketplace-content { padding: 20px 16px; }
+}
 
 /* ==================== PREMIUM TAB INDICATOR ==================== */
 .mode-tab.premium-tab::after { content: ''; }
@@ -1128,6 +1189,35 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   margin-top: 8px; letter-spacing: 0.3px;
 }
 .trial-counter strong { color: var(--accent); }
+
+/* ==================== FORTUNE DISPLAY ==================== */
+.fortune-display { margin: 12px 0; }
+.fortune-card {
+  background: linear-gradient(135deg, rgba(167,139,250,0.1), rgba(212,175,55,0.08));
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 12px; padding: 16px; text-align: center;
+}
+.fortune-header {
+  font-family: var(--font-display); font-size: 0.75rem; letter-spacing: 2px;
+  text-transform: uppercase; color: #a78bfa; margin-bottom: 10px;
+}
+.fortune-figure { margin-bottom: 10px; }
+.fortune-dots {
+  font-size: 1.4rem; line-height: 1.6; letter-spacing: 4px;
+  color: #D4AF37; margin-bottom: 6px;
+}
+.fortune-name {
+  font-family: var(--font-display); font-size: 1.3rem; font-weight: 700;
+  color: var(--text-primary); letter-spacing: 1px;
+}
+.fortune-attrs {
+  display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;
+  font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;
+}
+.fortune-attr b { color: var(--text-dim); }
+.fortune-code {
+  font-size: 0.72rem; color: var(--text-dim); letter-spacing: 0.5px; margin-top: 6px;
+}
 
 /* ==================== FROZEN PIECES (Enochian Chess) ==================== */
 .piece-wrap.frozen {

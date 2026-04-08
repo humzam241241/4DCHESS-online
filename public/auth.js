@@ -112,7 +112,7 @@ async function showLeaderboard() {
   const overlay = document.getElementById('leaderboard-overlay');
   overlay.style.display = 'flex';
   const body = document.getElementById('leaderboard-body');
-  body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px">Loading...</td></tr>';
+  body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px">Loading...</td></tr>';
 
   try {
     const { data: { session } } = await _sb.auth.getSession();
@@ -121,25 +121,86 @@ async function showLeaderboard() {
     });
     const rows = await res.json();
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#888">No ranked games yet</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#888">No ranked games yet</td></tr>';
       return;
     }
-    body.innerHTML = rows.map((r, i) => `
+    body.innerHTML = rows.map((r, i) => {
+      const medal = i === 0 ? '\u{1F947}' : i === 1 ? '\u{1F948}' : i === 2 ? '\u{1F949}' : `${i + 1}`;
+      return `
       <tr>
-        <td class="lb-rank">${i + 1}</td>
+        <td class="lb-rank">${medal}</td>
         <td class="lb-name">
           ${r.avatar_url ? `<img src="${r.avatar_url}" class="lb-avatar">` : ''}
           ${escapeHtml(r.display_name || 'Unknown')}
         </td>
-        <td class="lb-wins">${r.wins}</td>
+        <td class="lb-played">${r.games_played ?? 0}</td>
+        <td class="lb-wins">${r.wins ?? 0}</td>
         <td class="lb-rate">${r.win_rate ?? 0}%</td>
+        <td class="lb-points">${r.ranking_points ?? 0}</td>
       </tr>
-    `).join('');
+    `}).join('');
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444">Failed to load</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444">Failed to load</td></tr>`;
   }
 }
 window.showLeaderboard = showLeaderboard;
+
+// ==================== MARKETPLACE ====================
+
+async function showMarketplace() {
+  document.getElementById('marketplace-overlay').style.display = 'flex';
+  await loadMarketplaceItems();
+}
+
+async function loadMarketplaceItems() {
+  const grid = document.getElementById('marketplace-grid');
+  grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:30px">Loading...</p>';
+
+  try {
+    const activeFilter = document.querySelector('.mp-filter.active');
+    const type = activeFilter?.dataset.type || '';
+    const sort = document.getElementById('mp-sort')?.value || 'created_at';
+    const params = new URLSearchParams({ sort });
+    if (type) params.set('type', type);
+
+    const res = await fetch(`${window.BACKEND_URL || ''}/api/marketplace?${params}`);
+    const items = await res.json();
+
+    if (!items.length) {
+      grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:30px">No items yet. Be the first to create one!</p>';
+      return;
+    }
+
+    grid.innerHTML = items.map(item => {
+      const stars = item.rating ? '\u2605'.repeat(Math.round(item.rating)) + '\u2606'.repeat(5 - Math.round(item.rating)) : '\u2606\u2606\u2606\u2606\u2606';
+      const priceLabel = item.price > 0 ? `${item.price} pts` : 'Free';
+      const typeLabel = { board_theme: 'Board', piece_skin: 'Pieces', board_set: 'Set' }[item.item_type] || item.item_type;
+      const creator = item.profiles?.display_name || 'Unknown';
+      return `
+        <div class="mp-card" data-id="${item.id}">
+          <div class="mp-preview" style="background:${item.preview_url ? `url(${escapeHtml(item.preview_url)}) center/cover` : 'linear-gradient(135deg, #1a1a2e, #2d1f4e)'}">
+            <span class="mp-type-badge">${typeLabel}</span>
+          </div>
+          <div class="mp-info">
+            <div class="mp-title">${escapeHtml(item.title)}</div>
+            <div class="mp-meta">
+              <span class="mp-creator">by ${escapeHtml(creator)}</span>
+              <span class="mp-rating">${stars}</span>
+            </div>
+            <div class="mp-bottom">
+              <span class="mp-price ${item.price > 0 ? 'paid' : 'free'}">${priceLabel}</span>
+              <span class="mp-downloads">${item.downloads || 0} downloads</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;color:#ef4444">Failed to load marketplace</p>';
+  }
+}
+
+window.showMarketplace = showMarketplace;
 
 function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -181,6 +242,20 @@ async function initApp() {
   document.getElementById('btn-close-leaderboard')?.addEventListener('click', () => {
     document.getElementById('leaderboard-overlay').style.display = 'none';
   });
+
+  // Marketplace overlay
+  document.getElementById('btn-marketplace')?.addEventListener('click', showMarketplace);
+  document.getElementById('btn-close-marketplace')?.addEventListener('click', () => {
+    document.getElementById('marketplace-overlay').style.display = 'none';
+  });
+  document.querySelectorAll('.mp-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mp-filter').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadMarketplaceItems();
+    });
+  });
+  document.getElementById('mp-sort')?.addEventListener('change', loadMarketplaceItems);
 
   // History overlay
   document.getElementById('btn-history')?.addEventListener('click', () => {

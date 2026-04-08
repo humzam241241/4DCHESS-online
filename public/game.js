@@ -463,11 +463,12 @@ function renderBoard() {
   boardEl.appendChild(frag);
 
   // Single delegated event handler on board (better perf than 64 listeners)
-  boardEl.onclick = null;
-  boardEl.ontouchend = null;
-
-  // Use pointer events for unified touch/mouse handling
-  boardEl.addEventListener('pointerup', onBoardPointerUp, { passive: true });
+  // Only attach once — addEventListener stacks, so re-attaching causes
+  // duplicate handlers that fire N make-move events per click.
+  if (!boardPointerHandlerAttached) {
+    boardEl.addEventListener('pointerup', onBoardPointerUp, { passive: true });
+    boardPointerHandlerAttached = true;
+  }
 }
 
 let boardPointerHandlerAttached = false;
@@ -582,7 +583,7 @@ function onCellClick(row, col) {
       fromRow: selectedCell.row, fromCol: selectedCell.col,
       toRow: row, toCol: col
     }, (res) => {
-      if (res.error) { haptic('error'); return console.error(res.error); }
+      if (res.error) { haptic('error'); showToast(res.error, 2000); return console.error(res.error); }
       gameState = res.state;
       if (res.move) {
         lastMove = { from: res.move.from, to: res.move.to };
@@ -801,6 +802,7 @@ socket.on('game-over', (data) => {
   const overlay = document.getElementById('game-over-overlay');
   const text = document.getElementById('winner-text');
   const stats = document.getElementById('winner-stats');
+  const fortuneEl = document.getElementById('fortune-display');
   // Handle team win
   const teamNames = { rg: 'Red & Green', yb: 'Yellow & Black', ry: 'Team Sulphur', gb: 'Team Salt' };
   const winnerLabel = data.winnerTeam
@@ -819,7 +821,11 @@ socket.on('game-over', (data) => {
       const medal = medals[rank] || rank;
       const isMe = color === myColor;
       const highlight = isMe ? 'font-weight:bold;color:#D4AF37;font-size:1.1em;' : '';
-      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()}${isMe ? ' (YOU)' : ''}</div>`;
+      // Show each player's odd/even and points
+      const pts = data.playerPoints?.[color];
+      const oeLabel = pts != null ? (pts % 2 === 1 ? 'Odd' : 'Even') : '';
+      const ptsStr = pts != null ? ` (${pts} pts — ${oeLabel})` : '';
+      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()}${ptsStr}${isMe ? ' (YOU)' : ''}</div>`;
     }
     placementHTML += '</div>';
     // Show personal placement prominently
@@ -833,6 +839,33 @@ socket.on('game-over', (data) => {
   } else {
     stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
   }
+
+  // Show geomantic fortune
+  if (data.geomanticFigure && data.oddEvenCode && fortuneEl) {
+    const fig = data.geomanticFigure;
+    const code = data.oddEvenCode;
+    // Build the dot pattern (each digit: 1=single dot, 2=double dots)
+    const dotRows = code.split('').map(d => d === '1' ? '\u2022' : '\u2022 \u2022').join('<br>');
+    fortuneEl.innerHTML = `
+      <div class="fortune-card">
+        <div class="fortune-header">Geomantic Fortune</div>
+        <div class="fortune-figure">
+          <div class="fortune-dots">${dotRows}</div>
+          <div class="fortune-name">${fig.name}</div>
+        </div>
+        <div class="fortune-attrs">
+          <span class="fortune-attr"><b>Element:</b> ${fig.element}</span>
+          <span class="fortune-attr"><b>Planet:</b> ${fig.planet}</span>
+          <span class="fortune-attr"><b>Sign:</b> ${fig.sign}</span>
+        </div>
+        <div class="fortune-code">Code: ${code} (${code.split('').map(d => d === '1' ? 'Odd' : 'Even').join('-')})</div>
+      </div>
+    `;
+    fortuneEl.style.display = 'block';
+  } else if (fortuneEl) {
+    fortuneEl.style.display = 'none';
+  }
+
   overlay.classList.add('show');
   renderGame();
   haptic('heavy');
@@ -847,6 +880,24 @@ document.getElementById('btn-replay').addEventListener('click', () => {
 document.getElementById('btn-back-lobby').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('show');
   clearSession();
+  showScreen('lobby-screen');
+  refreshOpenGames();
+  refreshRecentGames();
+}, { passive: true });
+
+// Quit game mid-match and return to lobby
+document.getElementById('btn-quit-game')?.addEventListener('click', () => {
+  if (!gameId) return;
+  const confirmed = confirm('Are you sure you want to quit this game?');
+  if (!confirmed) return;
+  socket.emit('leave-game');
+  clearSession();
+  gameId = null; myColor = null; gameState = null; players = [];
+  selectedCell = null; validMoves = []; lastMove = null; moveHistory = [];
+  replayMode = false; replayMoves = [];
+  document.getElementById('move-history').innerHTML = '';
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('game-over-overlay').classList.remove('show');
   showScreen('lobby-screen');
   refreshOpenGames();
   refreshRecentGames();
@@ -1075,13 +1126,10 @@ function restoreSessionHistory(res) {
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('gesturechange', (e) => e.preventDefault());
 
-// Prevent double-tap zoom on the board specifically
-let lastTapTime = 0;
-document.getElementById('board')?.addEventListener('touchend', (e) => {
-  const now = Date.now();
-  if (now - lastTapTime < 300) e.preventDefault();
-  lastTapTime = now;
-});
+// Double-tap zoom on the board is already prevented via CSS touch-action: none.
+// A previous touchend handler was removed here because calling preventDefault()
+// on touchend can suppress the subsequent pointerup event on some mobile browsers,
+// which blocked piece movement clicks.
 
 // ==================== WAKE LOCK (keep screen on during game) ====================
 let wakeLock = null;
