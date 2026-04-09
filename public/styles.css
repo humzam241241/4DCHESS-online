@@ -1317,3 +1317,97 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   letter-spacing: 1px;
   font-weight: 700;
 }
+
+/* ==================== PLAYER SCORE ==================== */
+.player-score {
+  font-size: 0.75em;
+  color: #D4AF37;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ==================== PAWN PROMOTION DIALOG ==================== */
+.promotion-content {
+  text-align: center;
+  max-width: 400px;
+}
+.promotion-content h2 {
+  font-family: var(--font-display);
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.promotion-content p {
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+.promotion-options {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.promotion-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 20px;
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  color: var(--text-primary);
+}
+.promotion-btn:hover, .promotion-btn:active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 16px var(--accent-glow);
+  transform: scale(1.05);
+}
+.promo-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+.promo-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ==================== POINTS FLOAT ANIMATION ==================== */
+.points-float {
+  position: fixed;
+  color: #ffffff;
+  font-size: 1.4rem;
+  font-weight: 800;
+  pointer-events: none;
+  z-index: 4000;
+  text-shadow: 0 0 8px rgba(212,175,55,0.6), 0 2px 4px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: none;
+}
+.points-float.animate {
+  opacity: 1;
+  animation: pointsFloatUp 1.4s ease-out forwards;
+}
+@keyframes pointsFloatUp {
+  0% { opacity: 1; transform: translateY(0); }
+  60% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-60px); }
+}
+
+/* ==================== REWATCH CONTROLS ==================== */
+.rewatch-controls {
+  padding: 12px;
+  text-align: center;
+}
+.rewatch-controls .replay-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}

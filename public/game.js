@@ -46,6 +46,20 @@ let selectedMode = 'classic';
 let selectedBoard = localStorage.getItem('chaturaji_board') || 'bw';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 
+// ==================== CAPTURE POINT VALUES ====================
+const PIECE_VALUES = { king: 5, elephant: 4, horse: 3, boat: 2, pawn: 1, queen: 4, rook: 4, bishop: 2, knight: 3 };
+let captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
+
+function computeScoresFromHistory() {
+  captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
+  for (const move of moveHistory) {
+    if (move.captured) {
+      const pts = PIECE_VALUES[move.captured.type] || 1;
+      captureScores[move.player] = (captureScores[move.player] || 0) + pts;
+    }
+  }
+}
+
 // ==================== FREE TRIAL SYSTEM ====================
 const TRIAL_LIMITS = { classic_bot: 16, classic_mp: 8, enochian_bot: 12, enochian_mp: 6 };
 function getTrialCounts() {
@@ -540,6 +554,7 @@ function renderPlayers() {
     const isFroz = gameState.frozen?.includes(p.color);
     const isCurrent = gameState.currentPlayer === p.color && !gameState.winner;
     const count = countPieces(p.color);
+    const score = captureScores[p.color] || 0;
     let teamBadge = '';
     if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_LABELS[p.color]}</span>`;
     return `
@@ -550,7 +565,8 @@ function renderPlayers() {
         ${p.color === myColor ? '<span class="you-badge">YOU</span>' : ''}
         ${isFroz ? '<span class="frozen-badge">FROZEN</span>' : ''}
         ${!p.connected && p.socket_id !== null ? '<span class="disconnected">DC</span>' : ''}
-        <span class="pieces">${count}</span>
+        <span class="player-score" title="Capture score">${score} pts</span>
+        <span class="pieces" title="Pieces remaining">${count}</span>
       </div>
     `;
   }).join('');
@@ -572,8 +588,10 @@ function countPieces(color) {
 
 // ==================== INTERACTION ====================
 function onCellClick(row, col) {
+  if (replayMode) return; // No interaction during rewatch
   const noDiceGame = gameType === 'aow' || gameType === 'enochian';
   if (!gameState || gameState.winner || gameState.currentPlayer !== myColor) return;
+  if (gameState.pendingPromotion) return; // Wait for promotion choice
   if (!noDiceGame && !gameState.dice) return;
 
   // Clicking a valid move target
@@ -675,6 +693,12 @@ document.getElementById('btn-skip').addEventListener('click', () => {
 // ==================== MOVE HISTORY ====================
 function addMoveToHistory(move) {
   moveHistory.push(move);
+  // Update capture scores
+  if (move.captured) {
+    const pts = PIECE_VALUES[move.captured.type] || 1;
+    captureScores[move.player] = (captureScores[move.player] || 0) + pts;
+    showPointsAnimation(move.player, pts, move.to);
+  }
   const el = document.getElementById('move-history');
   const div = document.createElement('div');
   div.className = 'move-entry' + (move.captured?.type === 'king' ? ' king-capture' : '');
@@ -691,6 +715,37 @@ function addMoveToHistory(move) {
   `;
   el.appendChild(div);
   el.scrollTop = el.scrollHeight;
+}
+
+// ==================== POINTS ANIMATION ====================
+function showPointsAnimation(playerColor, points, toSquare) {
+  const boardEl = document.getElementById('board');
+  if (!boardEl) return;
+  const cell = boardEl.querySelector(`.cell[data-row="${toSquare.row}"][data-col="${toSquare.col}"]`);
+  if (!cell) {
+    // Fallback: show floating text over the board center
+    showFloatingPoints(boardEl, points);
+    return;
+  }
+  const rect = cell.getBoundingClientRect();
+  showFloatingPoints(document.body, points, rect.left + rect.width / 2, rect.top);
+}
+
+function showFloatingPoints(parent, points, x, y) {
+  const el = document.createElement('div');
+  el.className = 'points-float';
+  el.textContent = `+${points}`;
+  if (x !== undefined && y !== undefined) {
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+  } else {
+    el.style.left = '50%';
+    el.style.top = '50%';
+    el.style.transform = 'translateX(-50%)';
+  }
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('animate'));
+  setTimeout(() => el.remove(), 1500);
 }
 
 // ==================== CHAT ====================
@@ -787,9 +842,63 @@ socket.on('turn-skipped', (data) => {
 
 socket.on('chat-message', addChatMessage);
 
+// ==================== PAWN PROMOTION UI ====================
+socket.on('promotion-needed', (data) => {
+  // Only show the dialog if it's our pawn
+  if (data.color !== myColor) return;
+  showPromotionDialog(data.options);
+});
+
+socket.on('promotion-applied', (data) => {
+  // Update game state and close promotion dialog if open
+  gameState = data.state;
+  hidePromotionDialog();
+  addSystemMessage(`${playerName(data.color)} pawn promoted to ${data.promotedTo}!`);
+  renderGame();
+});
+
+function showPromotionDialog(options) {
+  const overlay = document.getElementById('promotion-overlay');
+  const optionsEl = document.getElementById('promotion-options');
+  optionsEl.innerHTML = options.map(type => {
+    const icon = PIECE_ICONS[type] || '?';
+    const name = type.charAt(0).toUpperCase() + type.slice(1);
+    return `<button class="promotion-btn" data-type="${type}">
+      <span class="promo-icon">${icon}</span>
+      <span class="promo-name">${name}</span>
+    </button>`;
+  }).join('');
+  // Add click handlers
+  optionsEl.querySelectorAll('.promotion-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const chosenType = btn.dataset.type;
+      socket.emit('promote-pawn', { chosenType }, (res) => {
+        if (res.error) { showToast(res.error, 2000); return; }
+        gameState = res.state;
+        hidePromotionDialog();
+        addSystemMessage(`Your pawn promoted to ${res.promotedTo}!`);
+        renderGame();
+      });
+    }, { passive: true });
+  });
+  overlay.style.display = 'flex';
+  haptic('medium');
+}
+
+function hidePromotionDialog() {
+  const overlay = document.getElementById('promotion-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 socket.on('game-started', (data) => {
   gameState = data.state; players = data.players;
   if (data.gameType) gameType = data.gameType;
+  // Reset scores for new game
+  captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
+  moveHistory = [];
+  // Hide rewatch tab for new games
+  const rwTab = document.getElementById('tab-btn-rewatch');
+  if (rwTab) rwTab.style.display = 'none';
   // Track free trial usage
   const isBotGame = players.some(p => p.name?.startsWith('Bot'));
   incrementTrial(gameType === 'enochian' ? 'enochian' : 'classic', isBotGame);
@@ -821,13 +930,30 @@ socket.on('game-over', (data) => {
       const medal = medals[rank] || rank;
       const isMe = color === myColor;
       const highlight = isMe ? 'font-weight:bold;color:#D4AF37;font-size:1.1em;' : '';
-      // Show each player's odd/even and points
+      // Show each player's ranking points
       const pts = data.playerPoints?.[color];
       const oeLabel = pts != null ? (pts % 2 === 1 ? 'Odd' : 'Even') : '';
-      const ptsStr = pts != null ? ` (${pts} pts — ${oeLabel})` : '';
-      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()}${ptsStr}${isMe ? ' (YOU)' : ''}</div>`;
+      const ptsStr = pts != null ? ` (${pts} ranking pts — ${oeLabel})` : '';
+      // Show capture score from the game
+      const capScore = captureScores[color] || 0;
+      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()} | Game: ${capScore} pts${ptsStr}${isMe ? ' (YOU)' : ''}</div>`;
     }
     placementHTML += '</div>';
+
+    // Show all players' capture scores summary
+    let scoresHTML = '<div style="margin:8px 0;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;">';
+    scoresHTML += '<div style="font-size:0.8em;color:var(--text-dim);margin-bottom:6px;font-weight:600;">Capture Scores</div>';
+    const order = (gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYERS : PLAYERS;
+    for (const color of order) {
+      const p = players.find(pl => pl.color === color);
+      if (!p) continue;
+      const score = captureScores[color] || 0;
+      const isMe = color === myColor;
+      const style = isMe ? 'font-weight:bold;color:#D4AF37;' : '';
+      scoresHTML += `<div style="padding:2px 0;${style}"><span style="color:${PLAYER_COLORS[color]}">${playerName(color)}</span>: ${score} pts${isMe ? ' (YOU)' : ''}</div>`;
+    }
+    scoresHTML += '</div>';
+
     // Show personal placement prominently
     const myRank = Object.entries(placements).find(([_, c]) => c === myColor);
     if (myRank) {
@@ -835,7 +961,7 @@ socket.on('game-over', (data) => {
       const medal = medals[rank] || rank;
       text.innerHTML = `<div style="font-size:2em;margin-bottom:4px;">${medal}</div>YOU GOT ${rank.toUpperCase()}!`;
     }
-    stats.innerHTML = placementHTML + `<div style="color:#a09880;margin-top:8px;">Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves</div>`;
+    stats.innerHTML = placementHTML + scoresHTML + `<div style="color:#a09880;margin-top:8px;">Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves</div>`;
   } else {
     stats.textContent = `Game lasted ${gameState.turnNumber} turns with ${moveHistory.length} moves`;
   }
@@ -865,6 +991,13 @@ socket.on('game-over', (data) => {
   } else if (fortuneEl) {
     fortuneEl.style.display = 'none';
   }
+
+  // Hide promotion dialog if open
+  hidePromotionDialog();
+
+  // Show the Rewatch tab button
+  const rwTab = document.getElementById('tab-btn-rewatch');
+  if (rwTab) rwTab.style.display = '';
 
   overlay.classList.add('show');
   renderGame();
@@ -967,14 +1100,19 @@ function startReplay() {
 }
 
 function applyReplayMove(state, m) {
-  const piece = state.board[m.from_row][m.from_col];
-  const captured = state.board[m.to_row][m.to_col];
-  state.board[m.to_row][m.to_col] = piece;
-  state.board[m.from_row][m.from_col] = null;
+  // Support both DB format (from_row/from_col) and client format (from.row/from.col)
+  const fr = m.from_row ?? m.from?.row;
+  const fc = m.from_col ?? m.from?.col;
+  const tr = m.to_row ?? m.to?.row;
+  const tc = m.to_col ?? m.to?.col;
+  const piece = state.board[fr][fc];
+  const captured = state.board[tr][tc];
+  state.board[tr][tc] = piece;
+  state.board[fr][fc] = null;
   // Handle pawn promotion in replay
   if (piece && piece.type === 'pawn') {
-    const promotedType = replayCheckPromotion(state, m.to_row, m.to_col, piece.color);
-    if (promotedType) state.board[m.to_row][m.to_col] = { type: promotedType, color: piece.color };
+    const promotedType = replayCheckPromotion(state, tr, tc, piece.color);
+    if (promotedType) state.board[tr][tc] = { type: promotedType, color: piece.color };
   }
   if (captured && captured.type === 'king') {
     state.eliminated.push(captured.color);
@@ -983,7 +1121,7 @@ function applyReplayMove(state, m) {
         if (state.board[r][c]?.color === captured.color)
           state.board[r][c] = null;
   }
-  return { from: { row: m.from_row, col: m.from_col }, to: { row: m.to_row, col: m.to_col } };
+  return { from: { row: fr, col: fc }, to: { row: tr, col: tc } };
 }
 
 // Mirror of engine pawn promotion logic for replay
@@ -1012,7 +1150,7 @@ function replayStep(dir) {
   const moves = replayMoves.length ? replayMoves : moveHistory;
   if (dir > 0 && replayIndex < moves.length) {
     lastMove = applyReplayMove(gameState, moves[replayIndex]);
-    gameState.currentPlayer = moves[replayIndex].player_color;
+    gameState.currentPlayer = moves[replayIndex].player_color || moves[replayIndex].player;
     replayIndex++;
   } else if (dir < 0 && replayIndex > 0) {
     replayIndex--;
@@ -1041,6 +1179,75 @@ document.getElementById('btn-replay-next').addEventListener('click', () => repla
 document.getElementById('btn-replay-end').addEventListener('click', () => {
   const moves = replayMoves.length ? replayMoves : moveHistory;
   while (replayIndex < moves.length) replayStep(1);
+}, { passive: true });
+
+// ==================== REWATCH TAB (in-game replay) ====================
+let rewatchState = null; // saved game state before entering rewatch
+let rwIndex = 0;
+
+function enterRewatch() {
+  rewatchState = JSON.parse(JSON.stringify(gameState));
+  replayMode = true;
+  rwIndex = 0;
+  gameState = buildInitialState();
+  lastMove = null;
+  updateRwCounter();
+  renderBoard();
+}
+
+function exitRewatch() {
+  if (rewatchState) gameState = rewatchState;
+  rewatchState = null;
+  replayMode = false;
+  rwIndex = 0;
+  lastMove = null;
+  renderGame();
+  // Switch back to moves tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="moves"]')?.classList.add('active');
+  document.getElementById('tab-moves')?.classList.add('active');
+}
+
+function rwStep(dir) {
+  const moves = moveHistory;
+  if (dir > 0 && rwIndex < moves.length) {
+    lastMove = applyReplayMove(gameState, moves[rwIndex]);
+    gameState.currentPlayer = moves[rwIndex].player_color || moves[rwIndex].player;
+    rwIndex++;
+  } else if (dir < 0 && rwIndex > 0) {
+    rwIndex--;
+    gameState = buildInitialState();
+    lastMove = null;
+    for (let i = 0; i < rwIndex; i++) {
+      lastMove = applyReplayMove(gameState, moves[i]);
+    }
+  }
+  haptic('light');
+  updateRwCounter();
+  renderBoard();
+}
+
+function updateRwCounter() {
+  const total = moveHistory.length;
+  const el = document.getElementById('rw-counter');
+  if (el) el.textContent = `${rwIndex} / ${total}`;
+}
+
+document.getElementById('btn-rw-start')?.addEventListener('click', () => {
+  rwIndex = 0; gameState = buildInitialState(); lastMove = null;
+  updateRwCounter(); renderBoard(); haptic('light');
+}, { passive: true });
+document.getElementById('btn-rw-prev')?.addEventListener('click', () => rwStep(-1), { passive: true });
+document.getElementById('btn-rw-next')?.addEventListener('click', () => rwStep(1), { passive: true });
+document.getElementById('btn-rw-end')?.addEventListener('click', () => {
+  while (rwIndex < moveHistory.length) rwStep(1);
+}, { passive: true });
+document.getElementById('btn-rw-exit')?.addEventListener('click', () => exitRewatch(), { passive: true });
+
+// When "Rewatch" tab is clicked, enter rewatch mode
+document.querySelector('.tab[data-tab="rewatch"]')?.addEventListener('click', () => {
+  if (!rewatchState && gameState?.winner) enterRewatch();
 }, { passive: true });
 
 // ==================== TOAST NOTIFICATIONS ====================
@@ -1106,6 +1313,7 @@ socket.on('connect', () => {
 function restoreSessionHistory(res) {
   if (res.moves) {
     moveHistory = [];
+    captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
     document.getElementById('move-history').innerHTML = '';
     for (const m of res.moves) {
       addMoveToHistory({

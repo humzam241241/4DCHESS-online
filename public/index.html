@@ -418,6 +418,14 @@
           <div class="legend-row"><span class="leg-sym">♟</span> <b>Pawn (P)</b> — fwd 1, diag capture; promotes to dead piece</div>
           <div class="legend-row" id="queen-legend-row"><span class="leg-sym">👑</span> <b>Queen (Q)</b> — jumps exactly 2 sq any direction <i>(2v2)</i></div>
           <div class="legend-row muted" style="margin-top:6px;font-size:0.85em">Dice: King die = King/Queen/Pawn. Missing piece = Pawn instead.</div>
+          <div class="legend-section" style="margin-top:10px;">
+            <h4 style="font-size:0.8em;color:var(--text-dim);margin:0 0 4px;">Capture Point Values</h4>
+            <div class="legend-row" style="font-size:0.82em;"><span class="leg-sym">♚</span> King — <b>5 pts</b></div>
+            <div class="legend-row" style="font-size:0.82em;"><span class="leg-sym">🐘</span> Elephant — <b>4 pts</b></div>
+            <div class="legend-row" style="font-size:0.82em;"><span class="leg-sym">♞</span> Horse — <b>3 pts</b></div>
+            <div class="legend-row" style="font-size:0.82em;"><span class="leg-sym">⛵</span> Boat — <b>2 pts</b></div>
+            <div class="legend-row" style="font-size:0.82em;"><span class="leg-sym">♟</span> Pawn — <b>1 pt</b></div>
+          </div>
         </div>
         <div id="aow-legend-rows" style="display:none">
           <div class="legend-row"><span class="leg-sym">♚</span> <b>King (K)</b> — 1 sq any dir; capture to eliminate</div>
@@ -451,6 +459,7 @@
         <div class="tabs">
           <button class="tab active" data-tab="moves">Moves</button>
           <button class="tab" data-tab="chat">Chat</button>
+          <button class="tab" data-tab="rewatch" id="tab-btn-rewatch" style="display:none">Rewatch</button>
         </div>
 
         <div class="tab-content active" id="tab-moves">
@@ -462,6 +471,19 @@
           <div class="chat-input-row">
             <input type="text" id="chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
             <button id="btn-send-chat" class="btn btn-primary btn-sm">Send</button>
+          </div>
+        </div>
+
+        <div class="tab-content" id="tab-rewatch">
+          <div class="rewatch-controls">
+            <div class="replay-controls">
+              <button id="btn-rw-start" class="btn btn-ghost btn-sm">|&lt;</button>
+              <button id="btn-rw-prev" class="btn btn-ghost btn-sm">&lt;</button>
+              <span id="rw-counter">0 / 0</span>
+              <button id="btn-rw-next" class="btn btn-ghost btn-sm">&gt;</button>
+              <button id="btn-rw-end" class="btn btn-ghost btn-sm">&gt;|</button>
+            </div>
+            <button id="btn-rw-exit" class="btn btn-danger btn-sm" style="margin-top:8px;width:100%">Exit Rewatch</button>
           </div>
         </div>
       </div>
@@ -477,6 +499,15 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ==================== PAWN PROMOTION DIALOG ==================== -->
+<div id="promotion-overlay" class="overlay" style="display:none">
+  <div class="overlay-content promotion-content">
+    <h2>Pawn Promotion</h2>
+    <p>Choose a piece to promote your pawn to:</p>
+    <div id="promotion-options" class="promotion-options"></div>
   </div>
 </div>
 
@@ -587,6 +618,61 @@
 
       <h3>Capturing</h3>
       <p>You capture an opponent&rsquo;s piece by moving onto its square. All pieces capture the same way they move, except the <strong>Boat</strong> which cannot capture a King. Captured pieces are removed from the board.</p>
+
+      <h3>Capture Point Values</h3>
+      <p>Each capture earns points based on the captured piece&rsquo;s value. Your score is the sum of all captures during the game.</p>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0;">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9818;</td>
+          <td style="padding:8px;"><strong>King</strong></td>
+          <td style="padding:8px;"><strong>5 points</strong></td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9820;</td>
+          <td style="padding:8px;"><strong>Elephant</strong></td>
+          <td style="padding:8px;"><strong>4 points</strong></td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9822;</td>
+          <td style="padding:8px;"><strong>Horse</strong></td>
+          <td style="padding:8px;"><strong>3 points</strong></td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;font-size:1.3em;">&#9821;</td>
+          <td style="padding:8px;"><strong>Boat</strong></td>
+          <td style="padding:8px;"><strong>2 points</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px;font-size:1.3em;">&#9823;</td>
+          <td style="padding:8px;"><strong>Pawn</strong></td>
+          <td style="padding:8px;"><strong>1 point</strong></td>
+        </tr>
+      </table>
+
+      <h3>Placement Ranking Points</h3>
+      <p>At the end of each game, players earn ranking points based on their final placement:</p>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0;">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;">&#x1F947;</td>
+          <td style="padding:8px;"><strong>Gold (1st)</strong></td>
+          <td style="padding:8px;"><strong>10 points</strong></td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;">&#x1F948;</td>
+          <td style="padding:8px;"><strong>Silver (2nd)</strong></td>
+          <td style="padding:8px;"><strong>6 points</strong></td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
+          <td style="padding:8px;">&#x1F949;</td>
+          <td style="padding:8px;"><strong>Bronze (3rd)</strong></td>
+          <td style="padding:8px;"><strong>3 points</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px;">4th</td>
+          <td style="padding:8px;"><strong>Fourth (4th)</strong></td>
+          <td style="padding:8px;"><strong>1 point</strong></td>
+        </tr>
+      </table>
 
       <h3>Pawn Promotion</h3>
       <p>When a Pawn reaches the far edge of the board (the opposite side from where it started), it may <strong>promote</strong>. The Pawn is replaced by the first major piece (Elephant, Horse, or Boat) of its color that has been captured. If all major pieces are still alive, the Pawn waits at the edge until one is captured.</p>
