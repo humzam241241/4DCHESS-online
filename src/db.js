@@ -279,13 +279,20 @@ async function awardRankingPoints(gameId, placements) {
   for (const [rank, color] of Object.entries(placements)) {
     if (!color || !PLACEMENT_POINTS[rank]) continue;
     const player = players.find(p => p.color === color);
-    if (!player?.user_id) continue;
 
     // Update placement on the player record
-    await supabase.from('players')
-      .update({ placement: rank })
-      .eq('game_id', gameId)
-      .eq('color', color);
+    if (player) {
+      await supabase.from('players')
+        .update({ placement: rank })
+        .eq('game_id', gameId)
+        .eq('color', color);
+    }
+
+    if (!player?.user_id) {
+      // Bot or guest: use placement points for this game
+      playerPoints[color] = PLACEMENT_POINTS[rank];
+      continue;
+    }
 
     // Award ranking points via increment
     const profile = await getProfile(player.user_id);
@@ -296,15 +303,21 @@ async function awardRankingPoints(gameId, placements) {
     }
   }
 
-  // Compute odd/even code: ordered gold -> silver -> bronze -> fourth
-  // Odd points = "1", Even points = "2"
+  // Compute odd/even code using move counts for variety across all 16 figures
+  // Each position's code is derived from move count parity (natural game variation)
+  const moves = await getMoves(gameId);
+  const moveCounts = {};
+  for (const m of moves) {
+    moveCounts[m.player_color] = (moveCounts[m.player_color] || 0) + 1;
+  }
+
   const orderedRanks = ['gold', 'silver', 'bronze', 'fourth'];
   let oddEvenCode = '';
   for (const rank of orderedRanks) {
     const color = placements[rank];
-    if (!color) { oddEvenCode += '0'; continue; }
-    const pts = playerPoints[color] ?? 0;
-    oddEvenCode += (pts % 2 === 1) ? '1' : '2';
+    if (!color) { oddEvenCode += '2'; continue; } // default even for missing
+    const count = moveCounts[color] || 0;
+    oddEvenCode += (count % 2 === 1) ? '1' : '2';
   }
 
   const geomanticFigure = getGeomanticFigure(oddEvenCode);
