@@ -468,6 +468,7 @@ function applyPromotion(state, chosenType) {
   const { row, col, color } = state.pendingPromotion;
   state.board[row][col] = { type: chosenType, color };
   delete state.pendingPromotion;
+  if (!state.winner) advanceTurn(state);
   return { promotedTo: chosenType };
 }
 

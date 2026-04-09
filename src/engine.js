@@ -255,9 +255,16 @@ function applyPromotion(state, chosenType) {
   const { row, col, color, options } = state.pendingPromotion;
   if (!options.includes(chosenType)) return { error: 'Invalid promotion choice' };
   state.board[row][col] = { type: chosenType, color };
-  const result = chosenType;
   delete state.pendingPromotion;
-  return { promotedTo: result };
+
+  // Now check if turn should advance (deferred from executeMove)
+  if (state.diceUsed[0] && state.diceUsed[1]) {
+    advanceTurn(state);
+  } else if (!hasAnyValidMove(state)) {
+    advanceTurn(state);
+  }
+
+  return { promotedTo: chosenType };
 }
 
 function hasAnyValidMove(state) {

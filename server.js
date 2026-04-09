@@ -743,24 +743,25 @@ io.on('connection', (socket) => {
 
       // If there's a pending promotion, notify the player
       if (result.state.pendingPromotion) {
+        const promo = result.state.pendingPromotion;
         io.to(gameId).emit('promotion-needed', {
-          color: result.state.pendingPromotion.color,
-          row: result.state.pendingPromotion.row,
-          col: result.state.pendingPromotion.col,
-          options: result.state.pendingPromotion.options,
+          color: promo.color,
+          row: promo.row,
+          col: promo.col,
+          options: promo.options,
         });
         // If it's a bot's pawn, auto-promote to the best piece
-        if (await isBot(gameId, result.state.pendingPromotion.color)) {
-          const bestType = result.state.pendingPromotion.options[0]; // elephant > horse > boat
+        if (await isBot(gameId, promo.color)) {
+          const bestType = promo.options[0]; // elephant > horse > boat
           const eng = getEngine(gameType || state.gameType);
           const promoResult = eng.applyPromotion(result.state, bestType);
           if (!promoResult.error) {
             activeGames.set(gameId, result.state);
             await db.updateGameState(gameId, result.state);
             io.to(gameId).emit('promotion-applied', {
-              color: result.state.currentPlayer,
-              row: result.state.pendingPromotion?.row,
-              col: result.state.pendingPromotion?.col,
+              color: promo.color,
+              row: promo.row,
+              col: promo.col,
               promotedTo: promoResult.promotedTo,
               state: sanitizeState(result.state),
             });
@@ -831,10 +832,7 @@ io.on('connection', (socket) => {
       const promoResult = eng.applyPromotion(state, chosenType);
       if (promoResult.error) return callback({ error: promoResult.error });
 
-      // Now check if turn should advance (dice both used or no moves left)
-      if (state.diceUsed && state.diceUsed[0] && state.diceUsed[1]) {
-        eng.skipTurn && eng.skipTurn(state); // advance turn
-      }
+      // Turn advancement is now handled inside applyPromotion
 
       activeGames.set(gameId, state);
       await db.updateGameState(gameId, state);
@@ -942,6 +940,21 @@ function scheduleBotMove(gameId, state) {
       const game = await db.getGame(gameId);
       const eng = getEngine(game?.game_type);
 
+      // Resolve any stuck pending promotion for this bot
+      if (current.pendingPromotion && await isBot(gameId, current.pendingPromotion.color)) {
+        const promo = current.pendingPromotion;
+        const bestType = promo.options ? promo.options[0] : 'elephant';
+        const promoResult = eng.applyPromotion(current, bestType);
+        if (!promoResult.error) {
+          activeGames.set(gameId, current);
+          await db.updateGameState(gameId, current);
+          io.to(gameId).emit('promotion-applied', {
+            color: promo.color, row: promo.row, col: promo.col,
+            promotedTo: promoResult.promotedTo, state: sanitizeState(current),
+          });
+        }
+      }
+
       if (current.phase === 'roll') {
         const rollResult = eng.rollDice(current);
         if (rollResult.error) return;
@@ -1002,6 +1015,23 @@ async function makeBotMoves(gameId, state, eng = engine) {
 
   const result = eng.executeMove(state, bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
   if (result.error) return;
+
+  // Auto-resolve bot pawn promotion
+  if (result.state.pendingPromotion) {
+    const promo = result.state.pendingPromotion;
+    const bestType = promo.options ? promo.options[0] : 'elephant';
+    const promoResult = eng.applyPromotion(result.state, bestType);
+    if (!promoResult.error) {
+      result.move.promotion = promoResult.promotedTo;
+      io.to(gameId).emit('promotion-applied', {
+        color: promo.color,
+        row: promo.row,
+        col: promo.col,
+        promotedTo: promoResult.promotedTo,
+        state: sanitizeState(result.state),
+      });
+    }
+  }
 
   activeGames.set(gameId, result.state);
   await db.updateGameState(gameId, result.state);
