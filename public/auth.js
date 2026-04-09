@@ -206,6 +206,180 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ==================== PROFILE PAGE ====================
+
+async function showProfile() {
+  const overlay = document.getElementById('profile-overlay');
+  overlay.style.display = 'flex';
+
+  await loadUserProfile();
+  const profile = window.currentProfile;
+  if (!profile) return;
+
+  // Populate header
+  const avatar = document.getElementById('profile-avatar');
+  avatar.src = profile.avatar_url || '';
+  avatar.style.display = profile.avatar_url ? '' : 'none';
+  document.getElementById('profile-display-name').textContent = profile.display_name || 'Unknown';
+  document.getElementById('profile-points').textContent = `${profile.ranking_points || 0} ranking points`;
+
+  // Populate edit form
+  document.getElementById('profile-edit-name').value = profile.display_name || '';
+  document.getElementById('profile-edit-avatar').value = profile.avatar_url || '';
+  document.getElementById('profile-edit-bio').value = profile.bio || '';
+  const social = profile.social_links || {};
+  document.getElementById('profile-edit-discord').value = social.discord || '';
+  document.getElementById('profile-edit-youtube').value = social.youtube || '';
+  document.getElementById('profile-edit-twitch').value = social.twitch || '';
+
+  loadMyStats();
+  loadMyItems();
+}
+
+async function saveProfile() {
+  const btn = document.getElementById('btn-save-profile');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    const body = {
+      display_name: document.getElementById('profile-edit-name').value.trim(),
+      avatar_url: document.getElementById('profile-edit-avatar').value.trim() || null,
+      bio: document.getElementById('profile-edit-bio').value.trim(),
+      social_links: {
+        discord: document.getElementById('profile-edit-discord').value.trim() || null,
+        youtube: document.getElementById('profile-edit-youtube').value.trim() || null,
+        twitch: document.getElementById('profile-edit-twitch').value.trim() || null,
+      }
+    };
+    const res = await fetch(`${window.BACKEND_URL || ''}/api/my-profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    window.currentProfile = data;
+    document.getElementById('profile-display-name').textContent = data.display_name || 'Unknown';
+    document.getElementById('user-display-name').textContent = data.display_name || '';
+    const av = document.getElementById('profile-avatar');
+    av.src = data.avatar_url || ''; av.style.display = data.avatar_url ? '' : 'none';
+    const nameInput = document.getElementById('player-name');
+    if (nameInput) nameInput.value = data.display_name || '';
+    localStorage.setItem('chaturaji_name', data.display_name || '');
+    _toast('Profile saved!');
+  } catch (e) { alert('Failed to save: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Save Profile'; }
+}
+
+async function loadMyStats() {
+  const grid = document.getElementById('profile-stats-grid');
+  grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:20px">Loading...</p>';
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    const res = await fetch(`${window.BACKEND_URL || ''}/api/my-stats`, {
+      headers: { Authorization: `Bearer ${session?.access_token}` }
+    });
+    const s = await res.json();
+    grid.innerHTML = `
+      <div class="profile-stat-card"><div class="profile-stat-value">${s.games_played || 0}</div><div class="profile-stat-label">Games Played</div></div>
+      <div class="profile-stat-card"><div class="profile-stat-value" style="color:#22c55e">${s.wins || 0}</div><div class="profile-stat-label">Wins (Gold)</div></div>
+      <div class="profile-stat-card"><div class="profile-stat-value" style="color:#94a3b8">${s.silvers || 0}</div><div class="profile-stat-label">Silver</div></div>
+      <div class="profile-stat-card"><div class="profile-stat-value" style="color:#cd7f32">${s.bronzes || 0}</div><div class="profile-stat-label">Bronze</div></div>
+      <div class="profile-stat-card"><div class="profile-stat-value">${s.win_rate || 0}%</div><div class="profile-stat-label">Win Rate</div></div>
+      <div class="profile-stat-card"><div class="profile-stat-value" style="color:#a78bfa">${window.currentProfile?.ranking_points || 0}</div><div class="profile-stat-label">Ranking Points</div></div>
+    `;
+  } catch (e) {
+    grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;color:#ef4444">Failed to load stats</p>';
+  }
+}
+
+async function loadMyItems() {
+  const grid = document.getElementById('profile-items-grid');
+  grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:20px">Loading...</p>';
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    const res = await fetch(`${window.BACKEND_URL || ''}/api/my-items`, {
+      headers: { Authorization: `Bearer ${session?.access_token}` }
+    });
+    const items = await res.json();
+    if (!items.length) {
+      grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:20px">No items yet. Go to the Create Listing tab to add one!</p>';
+      return;
+    }
+    grid.innerHTML = items.map(item => {
+      const priceLabel = item.price > 0 ? `${item.price} pts` : 'Free';
+      const typeLabel = { board_theme: 'Board', piece_skin: 'Pieces', board_set: 'Set' }[item.item_type] || item.item_type;
+      const statusBadge = item.status !== 'approved'
+        ? `<span class="mp-type-badge" style="position:absolute;left:8px;top:8px;background:${item.status === 'pending' ? 'rgba(234,179,8,0.8)' : 'rgba(239,68,68,0.8)'}">${item.status}</span>` : '';
+      return `
+        <div class="mp-card">
+          <div class="mp-preview" style="background:${item.preview_url ? `url(${escapeHtml(item.preview_url)}) center/cover` : 'linear-gradient(135deg, #1a1a2e, #2d1f4e)'}">
+            <span class="mp-type-badge">${typeLabel}</span>
+            ${statusBadge}
+          </div>
+          <div class="mp-info">
+            <div class="mp-title">${escapeHtml(item.title)}</div>
+            <div class="mp-bottom">
+              <span class="mp-price ${item.price > 0 ? 'paid' : 'free'}">${priceLabel}</span>
+              <span class="mp-downloads">${item.downloads || 0} downloads</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;color:#ef4444">Failed to load items</p>';
+  }
+}
+
+async function submitListing() {
+  const btn = document.getElementById('btn-submit-listing');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  try {
+    const title = document.getElementById('listing-title').value.trim();
+    if (!title) throw new Error('Title is required');
+    const { data: { session } } = await _sb.auth.getSession();
+    const res = await fetch(`${window.BACKEND_URL || ''}/api/marketplace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({
+        title,
+        item_type: document.getElementById('listing-type').value,
+        description: document.getElementById('listing-description').value.trim(),
+        preview_url: document.getElementById('listing-preview').value.trim() || null,
+        price: parseInt(document.getElementById('listing-price').value) || 0,
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById('listing-title').value = '';
+    document.getElementById('listing-description').value = '';
+    document.getElementById('listing-preview').value = '';
+    document.getElementById('listing-price').value = '0';
+    _toast('Listing submitted for review!');
+    // Switch to items tab
+    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.profile-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('.profile-tab[data-ptab="items"]').classList.add('active');
+    document.getElementById('ptab-items').classList.add('active');
+    loadMyItems();
+  } catch (e) { alert('Failed: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Submit Listing'; }
+}
+
+function _toast(msg) {
+  if (typeof showToast === 'function') { showToast(msg, 2500); return; }
+  const t = document.createElement('div');
+  t.textContent = msg;
+  Object.assign(t.style, {
+    position:'fixed', bottom:'24px', left:'50%', transform:'translateX(-50%)',
+    background:'#333', color:'#fff', padding:'10px 20px', borderRadius:'8px',
+    fontSize:'0.9rem', zIndex:'9999', boxShadow:'0 4px 16px rgba(0,0,0,0.4)'
+  });
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
 // ==================== SCREEN MANAGEMENT ====================
 
 function showSignIn() {
@@ -242,6 +416,22 @@ async function initApp() {
   document.getElementById('btn-close-leaderboard')?.addEventListener('click', () => {
     document.getElementById('leaderboard-overlay').style.display = 'none';
   });
+
+  // Profile overlay
+  document.getElementById('btn-profile')?.addEventListener('click', showProfile);
+  document.getElementById('btn-close-profile')?.addEventListener('click', () => {
+    document.getElementById('profile-overlay').style.display = 'none';
+  });
+  document.querySelectorAll('.profile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.profile-pane').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('ptab-' + tab.dataset.ptab)?.classList.add('active');
+    });
+  });
+  document.getElementById('btn-save-profile')?.addEventListener('click', saveProfile);
+  document.getElementById('btn-submit-listing')?.addEventListener('click', submitListing);
 
   // Marketplace overlay
   document.getElementById('btn-marketplace')?.addEventListener('click', showMarketplace);

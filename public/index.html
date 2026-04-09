@@ -122,6 +122,104 @@
   </div>
 </div>
 
+<!-- ==================== PROFILE OVERLAY ==================== -->
+<div id="profile-overlay" class="overlay" style="display:none">
+  <div class="overlay-content profile-content">
+    <button id="btn-close-profile" class="btn-close-overlay">&times;</button>
+
+    <div class="profile-tabs">
+      <button class="profile-tab active" data-ptab="info">Profile</button>
+      <button class="profile-tab" data-ptab="stats">Stats</button>
+      <button class="profile-tab" data-ptab="items">My Items</button>
+      <button class="profile-tab" data-ptab="create">Create Listing</button>
+    </div>
+
+    <!-- PROFILE INFO -->
+    <div class="profile-pane active" id="ptab-info">
+      <div class="profile-header">
+        <div class="profile-avatar-wrap">
+          <img id="profile-avatar" class="profile-avatar" src="" alt="">
+        </div>
+        <div class="profile-name-wrap">
+          <h2 id="profile-display-name"></h2>
+          <div class="profile-points" id="profile-points"></div>
+        </div>
+      </div>
+
+      <div class="profile-form">
+        <div class="profile-field">
+          <label for="profile-edit-name">Display Name</label>
+          <input type="text" id="profile-edit-name" maxlength="30" autocomplete="off">
+        </div>
+        <div class="profile-field">
+          <label for="profile-edit-avatar">Avatar URL</label>
+          <input type="url" id="profile-edit-avatar" placeholder="https://..." autocomplete="off">
+        </div>
+        <div class="profile-field">
+          <label for="profile-edit-bio">Bio</label>
+          <textarea id="profile-edit-bio" maxlength="300" rows="3" placeholder="Tell us about yourself..."></textarea>
+        </div>
+        <div class="profile-field">
+          <label>Social Links</label>
+          <input type="url" id="profile-edit-discord" placeholder="Discord invite URL" autocomplete="off">
+          <input type="url" id="profile-edit-youtube" placeholder="YouTube channel URL" autocomplete="off" style="margin-top:6px">
+          <input type="url" id="profile-edit-twitch" placeholder="Twitch channel URL" autocomplete="off" style="margin-top:6px">
+        </div>
+        <button id="btn-save-profile" class="btn btn-primary" style="margin-top:12px;width:100%">Save Profile</button>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="profile-pane" id="ptab-stats">
+      <h3 style="margin-bottom:16px">Game Statistics</h3>
+      <div id="profile-stats-grid" class="profile-stats-grid">
+        <p class="muted">Loading...</p>
+      </div>
+    </div>
+
+    <!-- MY ITEMS -->
+    <div class="profile-pane" id="ptab-items">
+      <h3 style="margin-bottom:16px">My Marketplace Items</h3>
+      <div id="profile-items-grid" class="marketplace-grid">
+        <p class="muted" style="grid-column:1/-1;text-align:center;padding:20px">Loading...</p>
+      </div>
+    </div>
+
+    <!-- CREATE LISTING -->
+    <div class="profile-pane" id="ptab-create">
+      <h3 style="margin-bottom:16px">Create Marketplace Listing</h3>
+      <div class="profile-form">
+        <div class="profile-field">
+          <label for="listing-title">Title</label>
+          <input type="text" id="listing-title" maxlength="60" placeholder="My Board Theme" autocomplete="off">
+        </div>
+        <div class="profile-field">
+          <label for="listing-type">Item Type</label>
+          <select id="listing-type" class="profile-select">
+            <option value="board_theme">Board Theme</option>
+            <option value="piece_skin">Piece Skin</option>
+            <option value="board_set">Board Set</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="listing-description">Description</label>
+          <textarea id="listing-description" maxlength="500" rows="3" placeholder="Describe your item..."></textarea>
+        </div>
+        <div class="profile-field">
+          <label for="listing-preview">Preview Image URL</label>
+          <input type="url" id="listing-preview" placeholder="https://..." autocomplete="off">
+        </div>
+        <div class="profile-field">
+          <label for="listing-price">Price (ranking points, 0 = free)</label>
+          <input type="number" id="listing-price" min="0" value="0">
+        </div>
+        <button id="btn-submit-listing" class="btn btn-primary" style="margin-top:12px;width:100%">Submit Listing</button>
+        <p class="muted" style="font-size:0.8rem;margin-top:8px">Items are reviewed before appearing in the marketplace.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== LOBBY SCREEN ==================== -->
 <div id="lobby-screen" class="screen active">
   <div class="lobby-container">
@@ -135,10 +233,11 @@
       <div class="user-bar" id="user-bar">
         <span id="user-display-name" class="user-name"></span>
         <div class="user-actions">
+          <button id="btn-profile" class="btn btn-ghost btn-sm">Profile</button>
           <button id="btn-history" class="btn btn-ghost btn-sm">History &amp; Rules</button>
           <button id="btn-leaderboard" class="btn btn-ghost btn-sm">Leaderboard</button>
           <button id="btn-marketplace" class="btn btn-ghost btn-sm">Marketplace</button>
-          <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">⚙ Admin</button>
+          <button id="btn-admin-link" class="btn btn-ghost btn-sm" onclick="window.location='/admin'">&#9881; Admin</button>
           <button id="btn-signout" class="btn btn-ghost btn-sm">Sign out</button>
         </div>
       </div>

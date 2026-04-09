@@ -182,6 +182,51 @@ app.get('/api/my-profile', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/my-profile', requireAuth, async (req, res) => {
+  try {
+    const { display_name, bio, social_links, avatar_url } = req.body;
+    const updates = {};
+    if (display_name !== undefined) updates.display_name = String(display_name).slice(0, 30);
+    if (bio !== undefined) updates.bio = String(bio).slice(0, 300);
+    if (social_links !== undefined) updates.social_links = social_links;
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
+    await db.updateProfile(req.user.id, updates);
+    const profile = await db.getProfile(req.user.id);
+    res.json(profile);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/my-stats', requireAuth, async (req, res) => {
+  try {
+    const { data: playerRows } = await supabase.from('players')
+      .select('color, placement, games!inner(status)')
+      .eq('user_id', req.user.id);
+    const finished = (playerRows || []).filter(r => r.games?.status === 'finished');
+    const wins = finished.filter(r => r.placement === 'gold').length;
+    const silvers = finished.filter(r => r.placement === 'silver').length;
+    const bronzes = finished.filter(r => r.placement === 'bronze').length;
+    res.json({
+      games_played: finished.length,
+      wins,
+      silvers,
+      bronzes,
+      win_rate: finished.length > 0 ? Math.round((wins / finished.length) * 100) : 0,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/my-items', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('marketplace_items')
+      .select('*')
+      .eq('creator_id', req.user.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/leaderboard', requireAuth, async (req, res) => {
   try {
     const profile = await db.getProfile(req.user.id);
