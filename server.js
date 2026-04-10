@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const Stripe = require('stripe');
 const engine = require('./src/engine');
+const engineAoW = require('./src/engineAoW');
 const engineEnochian = require('./src/engineEnochian');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
@@ -13,6 +14,7 @@ const supabase = require('./src/supabase');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 function getEngine(gameType) {
+  if (gameType === 'aow') return engineAoW;
   if (gameType === 'enochian') return engineEnochian;
   return engine;
 }

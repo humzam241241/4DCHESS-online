@@ -485,6 +485,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .turn-red    { color: var(--red); text-shadow: 0 0 20px rgba(239,68,68,0.3); }
 .turn-yellow { color: var(--yellow); text-shadow: 0 0 20px rgba(234,179,8,0.3); }
 .turn-green  { color: var(--green); text-shadow: 0 0 20px rgba(34,197,94,0.3); }
+.aow-mode .turn-green { text-shadow: 0 0 20px rgba(59,130,246,0.3); }
 .turn-black  { color: var(--slate); text-shadow: 0 0 20px rgba(148,163,184,0.2); }
 
 /* ==================== PLAYERS LIST ==================== */
@@ -611,6 +612,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 .piece-wrap.piece-red    { color: #ef4444; filter: drop-shadow(0 1px 3px rgba(239,68,68,0.35)); }
 .piece-wrap.piece-yellow { color: #eab308; filter: drop-shadow(0 1px 3px rgba(234,179,8,0.35)); }
 .piece-wrap.piece-green  { color: #22c55e; filter: drop-shadow(0 1px 3px rgba(34,197,94,0.35)); }
+.aow-mode .piece-wrap.piece-green { color: #3b82f6; filter: drop-shadow(0 1px 3px rgba(59,130,246,0.35)); }
 .piece-wrap.piece-black  { color: #c0c8d8; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
 
 /* ==================== THRONE SQUARE ==================== */

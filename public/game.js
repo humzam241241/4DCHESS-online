@@ -45,6 +45,10 @@ let gameType = 'classic'; // 'classic' | 'enochian'
 let selectedMode = 'classic';
 let selectedBoard = localStorage.getItem('chaturaji_board') || 'bw';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
+const AOW_PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#3b82f6', black: '#64748b' };
+function playerColor(color) {
+  return ((gameType === 'aow' || gameType === 'enochian') ? AOW_PLAYER_COLORS : PLAYER_COLORS)[color] || color;
+}
 
 // ==================== CAPTURE POINT VALUES ====================
 const PIECE_VALUES = { king: 5, elephant: 4, horse: 3, boat: 2, pawn: 1, queen: 4, rook: 4, bishop: 2, knight: 3 };
@@ -171,6 +175,8 @@ function saveSession() {
 }
 function clearSession() {
   localStorage.removeItem('chaturaji_session');
+  document.documentElement.style.setProperty('--green', '#22c55e');
+  document.body.classList.remove('aow-mode');
 }
 function loadSession() {
   try { return JSON.parse(localStorage.getItem('chaturaji_session')); } catch { return null; }
@@ -326,7 +332,7 @@ function renderWaitingPlayers() {
     const filled = !!p;
     return `
       <div class="waiting-slot ${filled ? 'filled' : ''}">
-        <div class="color-dot" style="background:${PLAYER_COLORS[color]}"></div>
+        <div class="color-dot" style="background:${playerColor(color)}"></div>
         <div>${playerName(color)}</div>
         ${filled
           ? `<div class="player-name">${escapeHtml(p.name)}${p.color === myColor ? ' (You)' : ''}</div>`
@@ -384,6 +390,10 @@ document.getElementById('btn-leave').addEventListener('click', () => {
 function enterGame() {
   showScreen('game-screen');
   document.getElementById('game-room-code').textContent = roomCode;
+  // In 2v2 modes, green player displays as blue
+  const isAoW = gameType === 'aow' || gameType === 'enochian';
+  document.documentElement.style.setProperty('--green', isAoW ? '#3b82f6' : '#22c55e');
+  document.body.classList.toggle('aow-mode', isAoW);
   computeCellSize();
   renderGame();
 }
@@ -560,7 +570,7 @@ function renderPlayers() {
     if (gameType === 'enochian') teamBadge = `<span class="team-badge team-${ENOCHIAN_TEAM_COLORS[p.color]}">${ENOCHIAN_TEAM_LABELS[p.color]}</span>`;
     return `
       <div class="player-row ${isElim ? 'eliminated' : ''} ${isFroz ? 'frozen' : ''} ${isCurrent ? 'current' : ''}">
-        <span class="dot" style="background:${PLAYER_COLORS[p.color]}"></span>
+        <span class="dot" style="background:${playerColor(p.color)}"></span>
         <span class="name">${escapeHtml(p.name)}</span>
         ${teamBadge}
         ${p.color === myColor ? '<span class="you-badge">YOU</span>' : ''}
@@ -711,7 +721,7 @@ function addMoveToHistory(move) {
     : '';
   div.innerHTML = `
     <span class="turn-num">${move.turn}.</span>
-    <span style="color:${PLAYER_COLORS[move.player]}">${playerName(move.player)}</span>
+    <span style="color:${playerColor(move.player)}">${playerName(move.player)}</span>
     ${move.piece} ${move.from.notation}-${move.to.notation}${capText}${promoText}
   `;
   el.appendChild(div);
@@ -951,7 +961,7 @@ socket.on('game-over', (data) => {
       const score = captureScores[color] || 0;
       const isMe = color === myColor;
       const style = isMe ? 'font-weight:bold;color:#D4AF37;' : '';
-      scoresHTML += `<div style="padding:2px 0;${style}"><span style="color:${PLAYER_COLORS[color]}">${playerName(color)}</span>: ${score} pts${isMe ? ' (YOU)' : ''}</div>`;
+      scoresHTML += `<div style="padding:2px 0;${style}"><span style="color:${playerColor(color)}">${playerName(color)}</span>: ${score} pts${isMe ? ' (YOU)' : ''}</div>`;
     }
     scoresHTML += '</div>';
 
