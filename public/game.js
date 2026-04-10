@@ -75,6 +75,7 @@ function incrementTrial(mode, isBot) {
   localStorage.setItem('chaturaji_trials', JSON.stringify(counts));
 }
 function canPlayTrial(mode, isBot) {
+  if (window.isPremium?.()) return true;
   const key = `${mode}_${isBot ? 'bot' : 'mp'}`;
   return getTrialCount(mode, isBot) < (TRIAL_LIMITS[key] || 16);
 }

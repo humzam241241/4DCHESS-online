@@ -63,8 +63,13 @@
   <div class="overlay-content payment-content" style="max-width:460px">
     <button id="btn-close-payment" class="btn-close-overlay">✕</button>
     <h2>Free Trial Ended</h2>
-    <p class="payment-sub">You've used all your free games for this mode. Join our community to stay updated on the full release!</p>
-    <div class="social-links-grid" style="margin-top:16px">
+    <p class="payment-sub">You've used all your free games for this mode. Upgrade to Premium to keep playing!</p>
+    <div style="display:flex;gap:12px;margin:20px 0">
+      <button id="btn-pay-lifetime" class="btn btn-primary" style="flex:1" onclick="startCheckout('lifetime')">Get Premium — $5</button>
+      <button id="btn-pay-monthly" class="btn btn-secondary" style="flex:1" onclick="startCheckout('monthly')">Subscribe Monthly</button>
+    </div>
+    <p class="payment-sub" style="margin-top:12px;opacity:0.7">Or join our community:</p>
+    <div class="social-links-grid" style="margin-top:8px">
       <a class="social-link" href="https://discord.gg/HU7zFR3CWU" target="_blank" rel="noopener noreferrer">
         <span class="social-icon">💬</span>
         <span>Discord — Join the Server</span>
