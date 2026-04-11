@@ -21,6 +21,8 @@ let moveHistory = [];
 let replayMode = false;
 let replayIndex = 0;
 let replayMoves = [];
+let rewatchState = null;
+let rwIndex = 0;
 
 const PLAYERS = ['red', 'yellow', 'green', 'black'];
 const PLAYER_NAMES = { red: 'Red', yellow: 'Yellow', green: 'Green', black: 'Black' };
@@ -986,6 +988,13 @@ socket.on('game-started', (data) => {
   // Reset scores for new game
   captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
   moveHistory = [];
+  // Reset replay / rewatch state so a new game doesn't inherit blocked
+  // input from a previous game's replay mode
+  replayMode = false;
+  replayMoves = [];
+  replayIndex = 0;
+  rewatchState = null;
+  rwIndex = 0;
   // Hide rewatch tab for new games
   const rwTab = document.getElementById('tab-btn-rewatch');
   if (rwTab) rwTab.style.display = 'none';
@@ -1113,6 +1122,12 @@ document.getElementById('btn-replay').addEventListener('click', () => {
 
 document.getElementById('btn-back-lobby').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('show');
+  // Reset replay/rewatch state so the next game doesn't inherit blocked input
+  replayMode = false;
+  replayMoves = [];
+  replayIndex = 0;
+  rewatchState = null;
+  rwIndex = 0;
   clearSession();
   showScreen('lobby-screen');
   refreshOpenGames();
@@ -1283,8 +1298,9 @@ document.getElementById('btn-replay-end').addEventListener('click', () => {
 }, { passive: true });
 
 // ==================== REWATCH TAB (in-game replay) ====================
-let rewatchState = null; // saved game state before entering rewatch
-let rwIndex = 0;
+// rewatchState and rwIndex are hoisted to the top of the file so that
+// game-started / btn-back-lobby handlers can reset them without running
+// into a temporal dead zone.
 
 function enterRewatch() {
   rewatchState = JSON.parse(JSON.stringify(gameState));

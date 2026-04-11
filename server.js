@@ -716,6 +716,13 @@ io.on('connection', (socket) => {
       callback({ state: sanitizeState(state), players: sortPlayers(players), moves, chat, gameType });
       socket.to(gameId).emit('player-reconnected', { color, name: playerName });
       console.log(`[Game] ${playerName} rejoined ${gameId}`);
+
+      // If it's currently a bot's turn, re-kick the bot scheduler. This recovers
+      // from the case where the previous scheduleBotMove was lost (server restart,
+      // cold lambda, crashed callback, etc.) and the game has been stuck waiting.
+      if (state && !state.winner && await isBot(gameId, state.currentPlayer)) {
+        scheduleBotMove(gameId, state);
+      }
     } catch (e) { console.error('[rejoin-game]', e); callback({ error: 'Server error' }); }
   });
 
