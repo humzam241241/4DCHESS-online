@@ -1414,6 +1414,40 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   gap: 8px;
 }
 
+/* ==================== BOT THINKING INDICATOR ==================== */
+.bot-thinking-dot {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 0.9em;
+  animation: botPulse 1s ease-in-out infinite;
+}
+.bot-timer {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.bot-dots::after {
+  content: '';
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: botDots 1.4s steps(4, end) infinite;
+}
+@keyframes botPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@keyframes botDots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+
 /* ==================== PAWN TYPE BADGE (Enochian) ==================== */
 .pawn-type-badge {
   position: absolute;

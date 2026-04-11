@@ -519,15 +519,53 @@ function onBoardPointerUp(e) {
   }
 }
 
+// ==================== BOT THINKING INDICATOR ====================
+let botThinkTimer = null;
+let botThinkStart = 0;
+
+function startBotThinkTimer(color) {
+  stopBotThinkTimer();
+  botThinkStart = Date.now();
+  const el = document.getElementById('turn-indicator');
+  if (!el) return;
+  const update = () => {
+    if (!gameState || gameState.winner) { stopBotThinkTimer(); return; }
+    if (gameState.currentPlayer !== color) { stopBotThinkTimer(); return; }
+    const elapsed = ((Date.now() - botThinkStart) / 1000).toFixed(1);
+    el.innerHTML = `<span class="bot-thinking-dot">●</span> ${playerName(color)} Bot thinking<span class="bot-dots"></span> <span class="bot-timer">${elapsed}s</span>`;
+  };
+  update();
+  botThinkTimer = setInterval(update, 100);
+}
+
+function stopBotThinkTimer() {
+  if (botThinkTimer) {
+    clearInterval(botThinkTimer);
+    botThinkTimer = null;
+  }
+}
+
+function isBotPlayer(color) {
+  const p = players.find(pl => pl.color === color);
+  return p && p.name && p.name.startsWith('Bot');
+}
+
 function renderTurnIndicator() {
   const el = document.getElementById('turn-indicator');
   if (gameState.winner) {
+    stopBotThinkTimer();
     el.textContent = `${playerName(gameState.winner)} Wins!`;
     el.className = `turn-indicator turn-${gameState.winner}`;
   } else {
     const isMe = gameState.currentPlayer === myColor;
-    el.textContent = isMe ? 'Your Turn!' : `${playerName(gameState.currentPlayer)}'s Turn`;
+    const isBot = !isMe && isBotPlayer(gameState.currentPlayer);
     el.className = `turn-indicator turn-${gameState.currentPlayer}`;
+    if (isBot) {
+      startBotThinkTimer(gameState.currentPlayer);
+    } else {
+      stopBotThinkTimer();
+      el.textContent = isMe ? 'Your Turn!' : `${playerName(gameState.currentPlayer)}'s Turn`;
+    }
   }
 }
 
