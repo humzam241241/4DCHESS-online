@@ -832,6 +832,7 @@ io.on('connection', (socket) => {
           placements: result.state.placements || null,
           oddEvenCode: rankingResult?.oddEvenCode || null,
           playerPoints: rankingResult?.playerPoints || null,
+          captureScores: rankingResult?.captureScores || null,
           geomanticFigure: rankingResult?.geomanticFigure || null,
         });
       } else {
@@ -1094,6 +1095,8 @@ async function makeBotMoves(gameId, state, eng = engine) {
       placements: result.state.placements || null,
       oddEvenCode: rankingResult?.oddEvenCode || null,
       playerPoints: rankingResult?.playerPoints || null,
+      captureScores: rankingResult?.captureScores || null,
+      geomanticFigure: rankingResult?.geomanticFigure || null,
     });
     return;
   }

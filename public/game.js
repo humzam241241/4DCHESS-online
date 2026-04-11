@@ -52,6 +52,7 @@ function playerColor(color) {
 
 // ==================== CAPTURE POINT VALUES ====================
 const PIECE_VALUES = { king: 5, elephant: 4, horse: 3, boat: 2, pawn: 1, queen: 4, rook: 4, bishop: 2, knight: 3 };
+const PLACEMENT_POINTS_DISPLAY = { gold: 10, silver: 6, bronze: 3, fourth: 1 };
 let captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
 
 function computeScoresFromHistory() {
@@ -463,7 +464,18 @@ function renderBoard() {
         icon.textContent = PIECE_ICONS[piece.type];
         const lbl = document.createElement('span');
         lbl.className = 'piece-name';
-        lbl.textContent = PIECE_ABBR[piece.type];
+        // For Enochian pawns, show which piece they promote to (e.g. P-Q, P-R, P-N, P-B)
+        if (piece.type === 'pawn' && piece.pawnOf) {
+          const pawnType = PIECE_ABBR[piece.pawnOf] || piece.pawnOf.charAt(0).toUpperCase();
+          lbl.textContent = `P-${pawnType}`;
+          // Add a small pawn-type badge on the piece
+          const badge = document.createElement('span');
+          badge.className = 'pawn-type-badge';
+          badge.textContent = PIECE_ICONS[piece.pawnOf] || '';
+          wrap.appendChild(badge);
+        } else {
+          lbl.textContent = PIECE_ABBR[piece.type];
+        }
         wrap.appendChild(icon);
         wrap.appendChild(lbl);
         // Frozen pieces: greyed out, not interactive
@@ -931,6 +943,9 @@ socket.on('game-over', (data) => {
   text.textContent = winnerLabel;
   text.className = data.winnerTeam ? '' : `turn-${data.winner}`;
 
+  // Prefer server-computed capture scores; fall back to client-tracked scores
+  const finalCaptureScores = data.captureScores || captureScores;
+
   // Show placements if available
   const placements = data.placements;
   if (placements) {
@@ -941,13 +956,12 @@ socket.on('game-over', (data) => {
       const medal = medals[rank] || rank;
       const isMe = color === myColor;
       const highlight = isMe ? 'font-weight:bold;color:#D4AF37;font-size:1.1em;' : '';
-      // Show each player's ranking points
-      const pts = data.playerPoints?.[color];
-      const oeLabel = pts != null ? (pts % 2 === 1 ? 'Odd' : 'Even') : '';
-      const ptsStr = pts != null ? ` (${pts} ranking pts — ${oeLabel})` : '';
-      // Show capture score from the game
-      const capScore = captureScores[color] || 0;
-      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()} | Game: ${capScore} pts${ptsStr}${isMe ? ' (YOU)' : ''}</div>`;
+      // Odd/even label is based on CAPTURE POINTS (what the geomantic figure uses)
+      const capScore = finalCaptureScores[color] || 0;
+      const oeLabel = capScore % 2 === 1 ? 'Odd (•)' : 'Even (••)';
+      const rankPts = data.playerPoints?.[color];
+      const rankStr = rankPts != null ? ` | +${PLACEMENT_POINTS_DISPLAY[rank] || 0} ranking` : '';
+      placementHTML += `<div style="padding:4px 0;${highlight}">${medal} ${playerName(color)} — ${rank.toUpperCase()} | ${capScore} capture pts (${oeLabel})${rankStr}${isMe ? ' (YOU)' : ''}</div>`;
     }
     placementHTML += '</div>';
 
@@ -958,10 +972,11 @@ socket.on('game-over', (data) => {
     for (const color of order) {
       const p = players.find(pl => pl.color === color);
       if (!p) continue;
-      const score = captureScores[color] || 0;
+      const score = finalCaptureScores[color] || 0;
+      const parityLabel = score % 2 === 1 ? 'Odd' : 'Even';
       const isMe = color === myColor;
       const style = isMe ? 'font-weight:bold;color:#D4AF37;' : '';
-      scoresHTML += `<div style="padding:2px 0;${style}"><span style="color:${playerColor(color)}">${playerName(color)}</span>: ${score} pts${isMe ? ' (YOU)' : ''}</div>`;
+      scoresHTML += `<div style="padding:2px 0;${style}"><span style="color:${playerColor(color)}">${playerName(color)}</span>: ${score} pts (${parityLabel})${isMe ? ' (YOU)' : ''}</div>`;
     }
     scoresHTML += '</div>';
 
@@ -983,6 +998,14 @@ socket.on('game-over', (data) => {
     const code = data.oddEvenCode;
     // Build the dot pattern (each digit: 1=single dot, 2=double dots)
     const dotRows = code.split('').map(d => d === '1' ? '\u2022' : '\u2022 \u2022').join('<br>');
+    // Show which placement each row corresponds to
+    const rankLabels = ['Gold', 'Silver', 'Bronze', 'Fourth'];
+    const rowLabels = code.split('').map((d, i) => {
+      const rank = rankLabels[i];
+      const color = placements?.[['gold','silver','bronze','fourth'][i]];
+      const score = color ? (finalCaptureScores[color] || 0) : 0;
+      return `${rank}: ${score} pts (${d === '1' ? 'Odd' : 'Even'})`;
+    }).join('<br>');
     fortuneEl.innerHTML = `
       <div class="fortune-card">
         <div class="fortune-header">Geomantic Fortune</div>
@@ -995,7 +1018,7 @@ socket.on('game-over', (data) => {
           <span class="fortune-attr"><b>Planet:</b> ${fig.planet}</span>
           <span class="fortune-attr"><b>Sign:</b> ${fig.sign}</span>
         </div>
-        <div class="fortune-code">Code: ${code} (${code.split('').map(d => d === '1' ? 'Odd' : 'Even').join('-')})</div>
+        <div class="fortune-code" style="margin-top:8px;">Cast from capture points:<br>${rowLabels}</div>
       </div>
     `;
     fortuneEl.style.display = 'block';

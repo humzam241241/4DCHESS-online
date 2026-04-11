@@ -271,10 +271,16 @@ function getGeomanticFigure(code) {
   return GEOMANTIC_FIGURES[code] || null;
 }
 
+// Point values for each captured piece type (Chaturaji capture scoring)
+const CAPTURE_POINT_VALUES = {
+  king: 5, elephant: 4, horse: 3, boat: 2, pawn: 1,
+  queen: 4, rook: 4, bishop: 2, knight: 3,
+};
+
 async function awardRankingPoints(gameId, placements) {
-  if (!placements) return { oddEvenCode: null, playerPoints: {} };
+  if (!placements) return { oddEvenCode: null, playerPoints: {}, captureScores: {} };
   const players = await getPlayers(gameId);
-  const playerPoints = {}; // color -> new total points
+  const playerPoints = {}; // color -> new total ranking points
 
   for (const [rank, color] of Object.entries(placements)) {
     if (!color || !PLACEMENT_POINTS[rank]) continue;
@@ -303,25 +309,29 @@ async function awardRankingPoints(gameId, placements) {
     }
   }
 
-  // Compute odd/even code using move counts for variety across all 16 figures
-  // Each position's code is derived from move count parity (natural game variation)
+  // Compute capture scores per player from the game's move history
   const moves = await getMoves(gameId);
-  const moveCounts = {};
+  const captureScores = { red: 0, yellow: 0, green: 0, black: 0 };
   for (const m of moves) {
-    moveCounts[m.player_color] = (moveCounts[m.player_color] || 0) + 1;
+    if (m.captured_type) {
+      const pts = CAPTURE_POINT_VALUES[m.captured_type] || 1;
+      captureScores[m.player_color] = (captureScores[m.player_color] || 0) + pts;
+    }
   }
 
+  // Compute odd/even code based on CAPTURE POINT parity for each placement
+  // Odd capture score = "1" (single dot), Even capture score = "2" (double dots)
   const orderedRanks = ['gold', 'silver', 'bronze', 'fourth'];
   let oddEvenCode = '';
   for (const rank of orderedRanks) {
     const color = placements[rank];
     if (!color) { oddEvenCode += '2'; continue; } // default even for missing
-    const count = moveCounts[color] || 0;
-    oddEvenCode += (count % 2 === 1) ? '1' : '2';
+    const score = captureScores[color] || 0;
+    oddEvenCode += (score % 2 === 1) ? '1' : '2';
   }
 
   const geomanticFigure = getGeomanticFigure(oddEvenCode);
-  return { oddEvenCode, playerPoints, geomanticFigure };
+  return { oddEvenCode, playerPoints, captureScores, geomanticFigure };
 }
 
 module.exports = {
