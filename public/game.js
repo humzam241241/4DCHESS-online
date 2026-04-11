@@ -673,10 +673,33 @@ function onCellClick(row, col) {
   // Clicking a valid move target
   if (selectedCell && validMoves.some(m => m.row === row && m.col === col)) {
     haptic('medium');
+
+    // If the socket is dead (common after long background on mobile),
+    // the emit will vanish and the callback will never fire. Catch this
+    // up front and force a reconnect so the user isn't stuck silently.
+    if (!socket.connected) {
+      showToast('Reconnecting...', 1500);
+      try { socket.connect(); } catch {}
+      return;
+    }
+
+    // Watchdog: if the server doesn't acknowledge within 5s, assume the
+    // transport is ghost-dead and recycle the socket so the next attempt
+    // goes through a fresh connection.
+    let acked = false;
+    const watchdog = setTimeout(() => {
+      if (acked) return;
+      showToast('No response — reconnecting…', 2000);
+      try { socket.disconnect(); } catch {}
+      try { socket.connect(); } catch {}
+    }, 5000);
+
     socket.emit('make-move', {
       fromRow: selectedCell.row, fromCol: selectedCell.col,
       toRow: row, toCol: col
     }, (res) => {
+      acked = true;
+      clearTimeout(watchdog);
       if (res.error) { haptic('error'); showToast(res.error, 2000); return console.error(res.error); }
       gameState = res.state;
       if (res.move) {
@@ -1444,9 +1467,46 @@ async function requestWakeLock() {
     }
   } catch {}
 }
-// Re-request on visibility change (iOS releases on tab switch)
+// Re-request wake lock AND verify/refresh the socket on visibility change.
+// Mobile browsers (especially iOS Safari) often suspend WebSockets silently
+// when the tab is backgrounded. Socket.IO's client can remain in a "connected"
+// state after the underlying transport is dead — emits vanish into the void
+// and their callbacks never fire, so clicking a piece does nothing at all.
+// On return, force a fresh rejoin so the server re-binds socket.data and we
+// get a current state snapshot.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && gameId) requestWakeLock();
+  if (document.visibilityState !== 'visible' || !gameId) return;
+  requestWakeLock();
+
+  const session = loadSession();
+  if (!session || session.gameId !== gameId) return;
+
+  // If the client thinks it's disconnected, kick off a reconnect — the
+  // 'connect' handler already triggers rejoin-game.
+  if (!socket.connected) {
+    socket.connect();
+    return;
+  }
+
+  // Client thinks it's connected but the transport may actually be dead.
+  // Use a timed emit: if the callback doesn't fire within 3s we force a
+  // disconnect-reconnect cycle, which triggers a clean rejoin.
+  let responded = false;
+  const fallback = setTimeout(() => {
+    if (responded) return;
+    try { socket.disconnect(); } catch {}
+    try { socket.connect(); } catch {}
+  }, 3000);
+
+  socket.emit('rejoin-game', session, (res) => {
+    responded = true;
+    clearTimeout(fallback);
+    if (!res || res.error) return;
+    gameState = res.state;
+    players = res.players;
+    if (res.gameType) gameType = res.gameType;
+    renderGame();
+  });
 });
 
 // ==================== INIT ====================
