@@ -686,6 +686,13 @@ io.on('connection', (socket) => {
         console.log(`[Game] ${game.code} started with 4 players`);
       }
 
+      // If this was a bot takeover on an in-progress game and another bot is
+      // still the current player, re-arm the bot scheduler (it may have been
+      // lost if the server restarted while the slot was a bot).
+      if (state && !state.winner && game.status === 'playing') {
+        scheduleBotMove(game.id, state);
+      }
+
       console.log(`[Game] ${playerName} joined ${game.code} as ${color}`);
     } catch (e) { console.error('[join-game]', e); callback({ error: 'Server error' }); }
   });
@@ -716,6 +723,12 @@ io.on('connection', (socket) => {
       callback({ state: sanitizeState(state), players: sortPlayers(players), moves, chat, gameType });
       socket.to(gameId).emit('player-reconnected', { color, name: playerName });
       console.log(`[Game] ${playerName} rejoined ${gameId}`);
+
+      // If the current player is a bot, the bot's setTimeout from the previous
+      // process may have been lost (server restart, crash, or long disconnect).
+      // Re-arm the scheduler so the bot isn't stuck forever. scheduleBotMove
+      // is idempotent and self-exits if the current player is a human.
+      if (state && !state.winner) scheduleBotMove(gameId, state);
     } catch (e) { console.error('[rejoin-game]', e); callback({ error: 'Server error' }); }
   });
 
@@ -826,6 +839,7 @@ io.on('connection', (socket) => {
       }
 
       if (result.state.winner) {
+        cancelPendingBotMove(gameId);
         io.to(gameId).emit('game-over', {
           winner: result.state.winner,
           winnerTeam: result.state.winnerTeam || null,
@@ -977,13 +991,26 @@ function isPlayerColor(socketData, color) {
   return false;
 }
 
+// Tracks the pending setTimeout handle per game so we can cancel/replace it.
+// Critical for idempotency: rejoin-game and move handlers can both schedule,
+// and without this we'd get racing bot actions on the same turn.
+const pendingBotTimers = new Map();
+
+function cancelPendingBotMove(gameId) {
+  const existing = pendingBotTimers.get(gameId);
+  if (existing) {
+    clearTimeout(existing);
+    pendingBotTimers.delete(gameId);
+  }
+}
+
 function scheduleBotMove(gameId, state) {
-  if (!state || state.winner) return;
+  if (!state || state.winner) { cancelPendingBotMove(gameId); return; }
+  cancelPendingBotMove(gameId);
 
   // Emit immediate bot-thinking signal so the client can show a timer
-  // BEFORE the setTimeout delay runs. We check isBot async but optimistically
-  // notify; if it turns out not to be a bot, the client's state-driven check
-  // will cancel the indicator.
+  // BEFORE the setTimeout delay runs. Optimistic — if it turns out not
+  // to be a bot, the client's state-driven check will cancel the indicator.
   (async () => {
     try {
       if (await isBot(gameId, state.currentPlayer)) {
@@ -992,7 +1019,8 @@ function scheduleBotMove(gameId, state) {
     } catch {}
   })();
 
-  setTimeout(async () => {
+  const timer = setTimeout(async () => {
+    pendingBotTimers.delete(gameId);
     try {
       let current = activeGames.get(gameId);
       if (!current || current.winner) return;
@@ -1027,8 +1055,17 @@ function scheduleBotMove(gameId, state) {
       }
 
       await makeBotMoves(gameId, current, eng);
-    } catch (e) { console.error('[bot]', e); }
+    } catch (e) {
+      console.error('[bot] scheduled move failed', e);
+      // Don't leave the game permanently stuck — try again shortly.
+      const retryState = activeGames.get(gameId);
+      if (retryState && !retryState.winner) {
+        setTimeout(() => scheduleBotMove(gameId, activeGames.get(gameId)), 2000);
+      }
+    }
   }, 1500 + Math.random() * 1200);
+
+  pendingBotTimers.set(gameId, timer);
 }
 
 async function makeBotMoves(gameId, state, eng = engine) {
@@ -1065,17 +1102,30 @@ async function makeBotMoves(gameId, state, eng = engine) {
 
   if (!bestMove) {
     const skipResult = eng.skipTurn(state);
+    if (skipResult.error) {
+      console.error('[bot] no moves AND skipTurn failed for', state.currentPlayer, skipResult.error);
+      return;
+    }
+    activeGames.set(gameId, skipResult.state);
+    await db.updateGameState(gameId, skipResult.state);
+    io.to(gameId).emit('turn-skipped', { player: state.currentPlayer, state: sanitizeState(skipResult.state) });
+    scheduleBotMove(gameId, skipResult.state);
+    return;
+  }
+
+  const result = eng.executeMove(state, bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
+  if (result.error) {
+    console.error('[bot] executeMove failed for', state.currentPlayer, result.error, bestMove);
+    // Don't leave the game frozen — try skipping this turn instead.
+    const skipResult = eng.skipTurn(state);
     if (!skipResult.error) {
       activeGames.set(gameId, skipResult.state);
-      await db.updateGameState(gameId, skipResult.state);
+      await db.updateGameState(gameId, skipResult.state).catch(e => console.error('[bot] updateGameState', e));
       io.to(gameId).emit('turn-skipped', { player: state.currentPlayer, state: sanitizeState(skipResult.state) });
       scheduleBotMove(gameId, skipResult.state);
     }
     return;
   }
-
-  const result = eng.executeMove(state, bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
-  if (result.error) return;
 
   // Auto-resolve bot pawn promotion
   if (result.state.pendingPromotion) {
@@ -1100,6 +1150,7 @@ async function makeBotMoves(gameId, state, eng = engine) {
   io.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
   if (result.state.winner) {
+    cancelPendingBotMove(gameId);
     await db.setGameFinished(gameId, result.state.winner);
     const rankingResult = await db.awardRankingPoints(gameId, result.state.placements).catch(e => { console.error('[ranking]', e); return null; });
     io.to(gameId).emit('game-over', {
@@ -1114,11 +1165,11 @@ async function makeBotMoves(gameId, state, eng = engine) {
     return;
   }
 
-  if (result.state.phase === 'move' && await isBot(gameId, result.state.currentPlayer)) {
-    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId), eng).catch(() => {}), 600);
-  } else {
-    scheduleBotMove(gameId, result.state);
-  }
+  // Always go through scheduleBotMove — it's idempotent and safely re-exits if
+  // the current player turns out to be human. Previously this path used a raw
+  // setTimeout that bypassed the bot timer registry and could race with a
+  // rejoin-triggered schedule.
+  scheduleBotMove(gameId, result.state);
 }
 
 function sanitizeState(state) {
