@@ -535,11 +535,17 @@ function startBotThinkTimer(color) {
   const update = () => {
     if (!gameState || gameState.winner) { stopBotThinkTimer(); return; }
     if (gameState.currentPlayer !== botThinkingColor) { stopBotThinkTimer(); return; }
-    const elapsed = ((Date.now() - botThinkStart) / 1000).toFixed(1);
+    const rawElapsed = (Date.now() - botThinkStart) / 1000;
+    const elapsed = Math.min(60, rawElapsed).toFixed(1);
     const dots = dotStates[dotIdx];
     dotIdx = (dotIdx + 1) % dotStates.length;
-    el.textContent = `\u25CF ${playerName(botThinkingColor)} Bot thinking${dots} ${elapsed}s`;
-    el.className = `turn-indicator turn-${botThinkingColor} bot-thinking`;
+    if (rawElapsed >= 60) {
+      el.textContent = `\u25CF ${playerName(botThinkingColor)} Bot — forcing move (60s+)`;
+      el.className = `turn-indicator turn-${botThinkingColor} bot-thinking bot-forcing`;
+    } else {
+      el.textContent = `\u25CF ${playerName(botThinkingColor)} Bot thinking${dots} ${elapsed}s`;
+      el.className = `turn-indicator turn-${botThinkingColor} bot-thinking`;
+    }
   };
   update();
   botThinkTimer = setInterval(update, 200);

@@ -977,8 +977,24 @@ function isPlayerColor(socketData, color) {
   return false;
 }
 
+// Watchdog to force-move a bot that has been stuck for too long.
+// Each gameId maps to the timeout id for the currently scheduled watchdog.
+const botWatchdogs = new Map();
+const BOT_MAX_THINK_MS = 60000; // 60 seconds
+
+function clearBotWatchdog(gameId) {
+  const id = botWatchdogs.get(gameId);
+  if (id) {
+    clearTimeout(id);
+    botWatchdogs.delete(gameId);
+  }
+}
+
 function scheduleBotMove(gameId, state) {
   if (!state || state.winner) return;
+
+  // Clear any previous watchdog for this game — the new scheduled move owns it now.
+  clearBotWatchdog(gameId);
 
   // Emit immediate bot-thinking signal so the client can show a timer
   // BEFORE the setTimeout delay runs. We check isBot async but optimistically
@@ -991,6 +1007,58 @@ function scheduleBotMove(gameId, state) {
       }
     } catch {}
   })();
+
+  // Arm the 60-second watchdog. If the normal bot move path hangs (db slowness,
+  // engine loop, etc.), this fallback forces the bot to make a move so the
+  // game never freezes.
+  const botColorWhenScheduled = state.currentPlayer;
+  const watchdogId = setTimeout(async () => {
+    botWatchdogs.delete(gameId);
+    try {
+      const current = activeGames.get(gameId);
+      if (!current || current.winner) return;
+      if (current.currentPlayer !== botColorWhenScheduled) return; // already moved on
+      if (!await isBot(gameId, current.currentPlayer)) return;
+      console.warn(`[bot watchdog] ${current.currentPlayer} stuck >${BOT_MAX_THINK_MS}ms, forcing move`);
+
+      const game = await db.getGame(gameId);
+      const eng = getEngine(game?.game_type);
+
+      // Resolve stuck promotion if any
+      if (current.pendingPromotion) {
+        const promo = current.pendingPromotion;
+        const bestType = promo.options ? promo.options[0] : 'elephant';
+        const promoResult = eng.applyPromotion(current, bestType);
+        if (!promoResult.error) {
+          activeGames.set(gameId, current);
+          await db.updateGameState(gameId, current).catch(() => {});
+          io.to(gameId).emit('promotion-applied', {
+            color: promo.color, row: promo.row, col: promo.col,
+            promotedTo: promoResult.promotedTo, state: sanitizeState(current),
+          });
+        }
+      }
+
+      // Force dice roll if still in roll phase
+      if (current.phase === 'roll') {
+        const rollResult = eng.rollDice(current);
+        if (!rollResult.error) {
+          current = rollResult.state;
+          activeGames.set(gameId, current);
+          await db.updateGameState(gameId, current).catch(() => {});
+          io.to(gameId).emit('dice-rolled', { player: current.currentPlayer, dice: rollResult.dice, state: sanitizeState(current) });
+        }
+      }
+
+      // Force a move (or skip if none available)
+      if (current.phase === 'move' && !current.winner) {
+        await makeBotMoves(gameId, current, eng);
+      }
+    } catch (e) {
+      console.error('[bot watchdog error]', e);
+    }
+  }, BOT_MAX_THINK_MS);
+  botWatchdogs.set(gameId, watchdogId);
 
   setTimeout(async () => {
     try {
@@ -1027,6 +1095,8 @@ function scheduleBotMove(gameId, state) {
       }
 
       await makeBotMoves(gameId, current, eng);
+      // Normal path completed — cancel the watchdog for this turn
+      clearBotWatchdog(gameId);
     } catch (e) { console.error('[bot]', e); }
   }, 1500 + Math.random() * 1200);
 }
