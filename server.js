@@ -790,7 +790,12 @@ io.on('connection', (socket) => {
 
       activeGames.set(gameId, result.state);
       await db.updateGameState(gameId, result.state);
-      await db.recordMove(gameId, result.move);
+      // Move history is informational, not state-critical. Don't let a
+      // recordMove failure bubble up and mask a successful move — the user
+      // would see a "Server error" toast and no UI update even though the
+      // game state already committed above, then the move would appear only
+      // after a refresh.
+      await db.recordMove(gameId, result.move).catch(e => console.error('[make-move] recordMove', e));
 
       let rankingResult = null;
       if (result.state.winner) {
@@ -1146,7 +1151,7 @@ async function makeBotMoves(gameId, state, eng = engine) {
 
   activeGames.set(gameId, result.state);
   await db.updateGameState(gameId, result.state);
-  await db.recordMove(gameId, result.move);
+  await db.recordMove(gameId, result.move).catch(e => console.error('[bot] recordMove', e));
   io.to(gameId).emit('move-made', { state: sanitizeState(result.state), move: result.move });
 
   if (result.state.winner) {
