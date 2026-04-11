@@ -1095,8 +1095,11 @@ function scheduleBotMove(gameId, state) {
       }
 
       await makeBotMoves(gameId, current, eng);
-      // Normal path completed — cancel the watchdog for this turn
-      clearBotWatchdog(gameId);
+      // Do NOT clearBotWatchdog here — makeBotMoves has already chained into
+      // scheduleBotMove for the next turn, which armed a fresh watchdog.
+      // Clearing here would cancel the NEW watchdog and leave the next bot
+      // with no 60s safety net (this was the bug: the timer ran past 60s
+      // forever because every bot-after-the-first had its watchdog wiped).
     } catch (e) { console.error('[bot]', e); }
   }, 1500 + Math.random() * 1200);
 }
@@ -1184,11 +1187,12 @@ async function makeBotMoves(gameId, state, eng = engine) {
     return;
   }
 
-  if (result.state.phase === 'move' && await isBot(gameId, result.state.currentPlayer)) {
-    setTimeout(() => makeBotMoves(gameId, activeGames.get(gameId), eng).catch(() => {}), 600);
-  } else {
-    scheduleBotMove(gameId, result.state);
-  }
+  // Always route through scheduleBotMove so every subsequent bot turn also
+  // gets a bot-thinking event, a client-visible timer, and a 60s watchdog.
+  // Previously, consecutive bot turns used setTimeout+makeBotMoves directly,
+  // which bypassed the watchdog — the game could hang indefinitely on any
+  // stuck bot after the first.
+  scheduleBotMove(gameId, result.state);
 }
 
 function sanitizeState(state) {
