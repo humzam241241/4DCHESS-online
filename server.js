@@ -832,6 +832,7 @@ io.on('connection', (socket) => {
           placements: result.state.placements || null,
           oddEvenCode: rankingResult?.oddEvenCode || null,
           playerPoints: rankingResult?.playerPoints || null,
+          captureScores: rankingResult?.captureScores || null,
           geomanticFigure: rankingResult?.geomanticFigure || null,
         });
       } else {
@@ -978,6 +979,19 @@ function isPlayerColor(socketData, color) {
 
 function scheduleBotMove(gameId, state) {
   if (!state || state.winner) return;
+
+  // Emit immediate bot-thinking signal so the client can show a timer
+  // BEFORE the setTimeout delay runs. We check isBot async but optimistically
+  // notify; if it turns out not to be a bot, the client's state-driven check
+  // will cancel the indicator.
+  (async () => {
+    try {
+      if (await isBot(gameId, state.currentPlayer)) {
+        io.to(gameId).emit('bot-thinking', { color: state.currentPlayer });
+      }
+    } catch {}
+  })();
+
   setTimeout(async () => {
     try {
       let current = activeGames.get(gameId);
@@ -1014,7 +1028,7 @@ function scheduleBotMove(gameId, state) {
 
       await makeBotMoves(gameId, current, eng);
     } catch (e) { console.error('[bot]', e); }
-  }, 800 + Math.random() * 700);
+  }, 1500 + Math.random() * 1200);
 }
 
 async function makeBotMoves(gameId, state, eng = engine) {
@@ -1094,6 +1108,8 @@ async function makeBotMoves(gameId, state, eng = engine) {
       placements: result.state.placements || null,
       oddEvenCode: rankingResult?.oddEvenCode || null,
       playerPoints: rankingResult?.playerPoints || null,
+      captureScores: rankingResult?.captureScores || null,
+      geomanticFigure: rankingResult?.geomanticFigure || null,
     });
     return;
   }

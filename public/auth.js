@@ -399,7 +399,8 @@ function loadGameScript() {
   if (_gameLoaded) return;
   _gameLoaded = true;
   const s = document.createElement('script');
-  s.src = '/game.js';
+  // Cache-bust game.js so browsers/service workers always pick up the latest build
+  s.src = '/game.js?v=' + (window.__BUILD_ID || Date.now());
   document.body.appendChild(s);
 }
 

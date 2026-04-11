@@ -42,44 +42,48 @@ function createGame() {
   const board = Array.from({ length: 8 }, () => Array(8).fill(null));
 
   // Yellow (Air, NW corner, a8 throne) — pawns move south
+  // Order from throne going east: King/Bishop, Queen, Rook, Knight
   board[0][0] = { type: 'king', color: 'yellow', thronePartner: { type: 'bishop', color: 'yellow' } };
   board[0][1] = { type: 'queen',  color: 'yellow' };
-  board[0][2] = { type: 'knight', color: 'yellow' };
-  board[0][3] = { type: 'rook',   color: 'yellow' };
+  board[0][2] = { type: 'rook',   color: 'yellow' };
+  board[0][3] = { type: 'knight', color: 'yellow' };
   board[1][0] = { type: 'pawn', color: 'yellow', pawnOf: 'bishop' };
   board[1][1] = { type: 'pawn', color: 'yellow', pawnOf: 'queen' };
-  board[1][2] = { type: 'pawn', color: 'yellow', pawnOf: 'knight' };
-  board[1][3] = { type: 'pawn', color: 'yellow', pawnOf: 'rook' };
+  board[1][2] = { type: 'pawn', color: 'yellow', pawnOf: 'rook' };
+  board[1][3] = { type: 'pawn', color: 'yellow', pawnOf: 'knight' };
 
   // Green/Blue (Water, NE corner, h8 throne) — pawns move west
+  // Order from throne going south: King/Bishop, Queen, Rook, Knight
   board[0][7] = { type: 'king', color: 'green', thronePartner: { type: 'bishop', color: 'green' } };
   board[1][7] = { type: 'queen',  color: 'green' };
-  board[2][7] = { type: 'knight', color: 'green' };
-  board[3][7] = { type: 'rook',   color: 'green' };
+  board[2][7] = { type: 'rook',   color: 'green' };
+  board[3][7] = { type: 'knight', color: 'green' };
   board[0][6] = { type: 'pawn', color: 'green', pawnOf: 'bishop' };
   board[1][6] = { type: 'pawn', color: 'green', pawnOf: 'queen' };
-  board[2][6] = { type: 'pawn', color: 'green', pawnOf: 'knight' };
-  board[3][6] = { type: 'pawn', color: 'green', pawnOf: 'rook' };
+  board[2][6] = { type: 'pawn', color: 'green', pawnOf: 'rook' };
+  board[3][6] = { type: 'pawn', color: 'green', pawnOf: 'knight' };
 
   // Red (Fire, SE corner, h1 throne) — pawns move north
+  // Order from throne going west: King/Bishop, Queen, Rook, Knight
   board[7][7] = { type: 'king', color: 'red', thronePartner: { type: 'bishop', color: 'red' } };
   board[7][6] = { type: 'queen',  color: 'red' };
-  board[7][5] = { type: 'knight', color: 'red' };
-  board[7][4] = { type: 'rook',   color: 'red' };
+  board[7][5] = { type: 'rook',   color: 'red' };
+  board[7][4] = { type: 'knight', color: 'red' };
   board[6][7] = { type: 'pawn', color: 'red', pawnOf: 'bishop' };
   board[6][6] = { type: 'pawn', color: 'red', pawnOf: 'queen' };
-  board[6][5] = { type: 'pawn', color: 'red', pawnOf: 'knight' };
-  board[6][4] = { type: 'pawn', color: 'red', pawnOf: 'rook' };
+  board[6][5] = { type: 'pawn', color: 'red', pawnOf: 'rook' };
+  board[6][4] = { type: 'pawn', color: 'red', pawnOf: 'knight' };
 
   // Black (Earth, SW corner, a1 throne) — pawns move east
+  // Order from throne going north: King/Bishop, Queen, Rook, Knight
   board[7][0] = { type: 'king', color: 'black', thronePartner: { type: 'bishop', color: 'black' } };
   board[6][0] = { type: 'queen',  color: 'black' };
-  board[5][0] = { type: 'knight', color: 'black' };
-  board[4][0] = { type: 'rook',   color: 'black' };
+  board[5][0] = { type: 'rook',   color: 'black' };
+  board[4][0] = { type: 'knight', color: 'black' };
   board[7][1] = { type: 'pawn', color: 'black', pawnOf: 'bishop' };
   board[6][1] = { type: 'pawn', color: 'black', pawnOf: 'queen' };
-  board[5][1] = { type: 'pawn', color: 'black', pawnOf: 'knight' };
-  board[4][1] = { type: 'pawn', color: 'black', pawnOf: 'rook' };
+  board[5][1] = { type: 'pawn', color: 'black', pawnOf: 'rook' };
+  board[4][1] = { type: 'pawn', color: 'black', pawnOf: 'knight' };
 
   return {
     board,
