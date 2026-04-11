@@ -522,20 +522,27 @@ function onBoardPointerUp(e) {
 // ==================== BOT THINKING INDICATOR ====================
 let botThinkTimer = null;
 let botThinkStart = 0;
+let botThinkingColor = null;
 
 function startBotThinkTimer(color) {
   stopBotThinkTimer();
+  botThinkingColor = color;
   botThinkStart = Date.now();
   const el = document.getElementById('turn-indicator');
   if (!el) return;
+  const dotStates = ['.', '..', '...', ''];
+  let dotIdx = 0;
   const update = () => {
     if (!gameState || gameState.winner) { stopBotThinkTimer(); return; }
-    if (gameState.currentPlayer !== color) { stopBotThinkTimer(); return; }
+    if (gameState.currentPlayer !== botThinkingColor) { stopBotThinkTimer(); return; }
     const elapsed = ((Date.now() - botThinkStart) / 1000).toFixed(1);
-    el.innerHTML = `<span class="bot-thinking-dot">●</span> ${playerName(color)} Bot thinking<span class="bot-dots"></span> <span class="bot-timer">${elapsed}s</span>`;
+    const dots = dotStates[dotIdx];
+    dotIdx = (dotIdx + 1) % dotStates.length;
+    el.textContent = `\u25CF ${playerName(botThinkingColor)} Bot thinking${dots} ${elapsed}s`;
+    el.className = `turn-indicator turn-${botThinkingColor} bot-thinking`;
   };
   update();
-  botThinkTimer = setInterval(update, 100);
+  botThinkTimer = setInterval(update, 200);
 }
 
 function stopBotThinkTimer() {
@@ -543,11 +550,19 @@ function stopBotThinkTimer() {
     clearInterval(botThinkTimer);
     botThinkTimer = null;
   }
+  botThinkingColor = null;
 }
 
 function isBotPlayer(color) {
   const p = players.find(pl => pl.color === color);
-  return p && p.name && p.name.startsWith('Bot');
+  if (!p) return false;
+  // Server identifies bots as: no socket_id AND name starts with "Bot"
+  if (p.name && p.name.startsWith('Bot')) return true;
+  if (p.socket_id === null || p.socket_id === undefined) {
+    // Disconnected player or bot — treat as bot if name matches pattern
+    if (p.name && p.name.startsWith('Bot')) return true;
+  }
+  return false;
 }
 
 function renderTurnIndicator() {
@@ -559,12 +574,12 @@ function renderTurnIndicator() {
   } else {
     const isMe = gameState.currentPlayer === myColor;
     const isBot = !isMe && isBotPlayer(gameState.currentPlayer);
-    el.className = `turn-indicator turn-${gameState.currentPlayer}`;
     if (isBot) {
       startBotThinkTimer(gameState.currentPlayer);
     } else {
       stopBotThinkTimer();
       el.textContent = isMe ? 'Your Turn!' : `${playerName(gameState.currentPlayer)}'s Turn`;
+      el.className = `turn-indicator turn-${gameState.currentPlayer}`;
     }
   }
 }
@@ -902,6 +917,14 @@ socket.on('turn-skipped', (data) => {
 });
 
 socket.on('chat-message', addChatMessage);
+
+// ==================== BOT THINKING EVENT ====================
+socket.on('bot-thinking', (data) => {
+  if (!gameState || gameState.winner) return;
+  if (data && data.color) {
+    startBotThinkTimer(data.color);
+  }
+});
 
 // ==================== PAWN PROMOTION UI ====================
 socket.on('promotion-needed', (data) => {
