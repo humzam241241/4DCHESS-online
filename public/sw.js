@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chaturaji-v1';
+const CACHE_NAME = 'chaturaji-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
