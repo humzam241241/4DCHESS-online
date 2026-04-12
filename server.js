@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const Stripe = require('stripe');
-// const rateLimit = require('express-rate-limit'); // disabled — causes crashes behind Render proxy
+const rateLimit = require('express-rate-limit');
 const engine = require('./src/engine');
 const engineAoW = require('./src/engineAoW');
 const engineEnochian = require('./src/engineEnochian');
@@ -138,12 +138,11 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Rate limiting (H5)
-// Rate limiting disabled until proxy config is resolved
-// const apiLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false, validate: false });
-// const checkoutLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error: 'Too many requests' }, validate: false });
-// app.use('/api/', apiLimiter);
-// app.use('/api/create-checkout', checkoutLimiter);
+// Rate limiting — works with trust proxy = 1 (line 36)
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false });
+const checkoutLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error: 'Too many requests' } });
+app.use('/api/', apiLimiter);
+app.use('/api/create-checkout', checkoutLimiter);
 
 // Auth middleware for protected routes
 async function requireAuth(req, res, next) {
