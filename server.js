@@ -5,11 +5,18 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const Stripe = require('stripe');
+const rateLimit = require('express-rate-limit');
 const engine = require('./src/engine');
 const engineAoW = require('./src/engineAoW');
 const engineEnochian = require('./src/engineEnochian');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
+
+// Fail fast on missing required env vars
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) { console.error(`FATAL: Missing env var ${key}`); process.exit(1); }
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
@@ -27,11 +34,12 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim
 
 const app = express();
 const server = http.createServer(app);
+const CORS_ORIGINS = [
+  'http://localhost:3000',
+  'https://chaturaji-4dchess.vercel.app',
+];
 const io = new Server(server, {
-  cors: {
-    origin: ['http://localhost:3000', 'https://chaturaji-4dchess.vercel.app', /\.vercel\.app$/],
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: CORS_ORIGINS, methods: ['GET', 'POST'] }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -97,11 +105,21 @@ app.post('/api/stripe-webhook',
 
 // ==================== MIDDLEWARE ====================
 
+// Security headers (H1)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
 // CORS for REST API (Socket.IO has its own cors config above)
-const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://chaturaji-4dchess.vercel.app'];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && (ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin))) {
+  if (origin && CORS_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -112,6 +130,12 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
+// Rate limiting (H5)
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false });
+const checkoutLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error: 'Too many requests' } });
+app.use('/api/', apiLimiter);
+app.use('/api/create-checkout', checkoutLimiter);
 
 // Auth middleware for protected routes
 async function requireAuth(req, res, next) {
@@ -129,7 +153,7 @@ const activeGames = new Map();
 // ==================== REST API ====================
 
 app.get('/api/games', async (req, res) => {
-  try { res.json(await db.getOpenGames()); } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await db.getOpenGames()); } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/games/:id', async (req, res) => {
@@ -138,7 +162,7 @@ app.get('/api/games/:id', async (req, res) => {
     if (!game) return res.status(404).json({ error: 'Game not found' });
     const [players, moves] = await Promise.all([db.getPlayers(game.id), db.getMoves(game.id)]);
     res.json({ game, players, moves });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/games/code/:code', async (req, res) => {
@@ -147,19 +171,19 @@ app.get('/api/games/code/:code', async (req, res) => {
     if (!game) return res.status(404).json({ error: 'Game not found' });
     const players = await db.getPlayers(game.id);
     res.json({ game, players });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/games/:id/moves', async (req, res) => {
-  try { res.json(await db.getMoves(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await db.getMoves(req.params.id)); } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/stats/:name', async (req, res) => {
-  try { res.json(await db.getPlayerStats(req.params.name)); } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await db.getPlayerStats(req.params.name)); } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/recent', async (req, res) => {
-  try { res.json(await db.getRecentGames(20)); } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await db.getRecentGames(20)); } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Public config for frontend (only safe public keys)
@@ -181,8 +205,14 @@ app.get('/api/my-profile', requireAuth, async (req, res) => {
       req.user.user_metadata?.avatar_url
     );
     res.json(profile);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
+
+function isValidHttpsUrl(str) {
+  try { const u = new URL(str); return u.protocol === 'https:'; } catch { return false; }
+}
+
+const SOCIAL_LINK_KEYS = ['discord', 'youtube', 'twitch', 'twitter', 'github'];
 
 app.put('/api/my-profile', requireAuth, async (req, res) => {
   try {
@@ -190,13 +220,31 @@ app.put('/api/my-profile', requireAuth, async (req, res) => {
     const updates = {};
     if (display_name !== undefined) updates.display_name = String(display_name).slice(0, 30);
     if (bio !== undefined) updates.bio = String(bio).slice(0, 300);
-    if (social_links !== undefined) updates.social_links = social_links;
-    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (social_links !== undefined) {
+      if (typeof social_links !== 'object' || social_links === null || Array.isArray(social_links)) {
+        return res.status(400).json({ error: 'social_links must be an object' });
+      }
+      const sanitized = {};
+      for (const key of SOCIAL_LINK_KEYS) {
+        if (key in social_links) {
+          const val = String(social_links[key] || '').slice(0, 200);
+          if (val && !isValidHttpsUrl(val)) return res.status(400).json({ error: `${key} must be a valid https URL` });
+          sanitized[key] = val || null;
+        }
+      }
+      updates.social_links = sanitized;
+    }
+    if (avatar_url !== undefined) {
+      if (avatar_url && !isValidHttpsUrl(avatar_url)) {
+        return res.status(400).json({ error: 'avatar_url must be a valid https URL' });
+      }
+      updates.avatar_url = avatar_url || null;
+    }
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
     await db.updateProfile(req.user.id, updates);
     const profile = await db.getProfile(req.user.id);
     res.json(profile);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[my-profile]', e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/my-stats', requireAuth, async (req, res) => {
@@ -215,7 +263,7 @@ app.get('/api/my-stats', requireAuth, async (req, res) => {
       bronzes,
       win_rate: finished.length > 0 ? Math.round((wins / finished.length) * 100) : 0,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/my-items', requireAuth, async (req, res) => {
@@ -226,7 +274,7 @@ app.get('/api/my-items', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/leaderboard', requireAuth, async (req, res) => {
@@ -234,7 +282,7 @@ app.get('/api/leaderboard', requireAuth, async (req, res) => {
     const profile = await db.getProfile(req.user.id);
     if (!isPremium(profile)) return res.status(403).json({ error: 'Premium required' });
     res.json(await db.getLeaderboard());
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // ==================== ADMIN MIDDLEWARE + ROUTES ====================
@@ -270,7 +318,7 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
       waitingGames:      g.filter(x => x.status === 'waiting').length,
       finishedGames:     g.filter(x => x.status === 'finished').length,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // All users (join auth.users + profiles + game counts)
@@ -296,20 +344,19 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
       has_lifetime_access: profileMap[u.id]?.has_lifetime_access || false,
       subscription_status: profileMap[u.id]?.subscription_status || 'none',
       is_admin: profileMap[u.id]?.is_admin || false,
-      stripe_customer_id: profileMap[u.id]?.stripe_customer_id || null,
       games_played: gameCounts[u.id] || 0,
       created_at: u.created_at,
     })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     res.json({ users });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Update a user's access/permissions
 app.patch('/api/admin/users/:userId', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
-    const allowed = ['has_lifetime_access', 'subscription_status', 'is_admin'];
+    const allowed = ['has_lifetime_access', 'subscription_status'];
     const updates = {};
     for (const key of allowed) {
       if (key in req.body) updates[key] = req.body[key];
@@ -317,7 +364,7 @@ app.patch('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
     await db.updateProfile(userId, updates);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Recent games
@@ -325,7 +372,7 @@ app.get('/api/admin/games', requireAdmin, async (req, res) => {
   try {
     const games = await db.getRecentGames(50);
     res.json({ games });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Revenue from Stripe
@@ -360,7 +407,7 @@ app.get('/api/marketplace', async (req, res) => {
     const { data, error } = await query.limit(50);
     if (error) throw error;
     res.json(data || []);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Get single item
@@ -376,7 +423,7 @@ app.get('/api/marketplace/:id', async (req, res) => {
       .select('*, profiles!user_id(display_name)').eq('item_id', req.params.id)
       .order('created_at', { ascending: false }).limit(20);
     res.json({ ...data, reviews: reviews || [] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Create item (auth required)
@@ -390,7 +437,7 @@ app.post('/api/marketplace', requireAuth, async (req, res) => {
     }).select().single();
     if (error) throw error;
     res.json(data);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Purchase/download item
@@ -402,18 +449,20 @@ app.post('/api/marketplace/:id/purchase', requireAuth, async (req, res) => {
     const { data: existing } = await supabase.from('marketplace_purchases')
       .select('id').eq('user_id', req.user.id).eq('item_id', req.params.id).maybeSingle();
     if (existing) return res.json({ already_owned: true, asset_data: item.data.asset_data });
-    // Deduct points if item has a price
+    // Atomic deduction — prevents race condition from concurrent requests
     if (item.data.price > 0) {
-      const profile = await db.getProfile(req.user.id);
-      if ((profile?.ranking_points || 0) < item.data.price) {
+      const { data: deducted, error: deductErr } = await supabase.rpc('deduct_ranking_points', {
+        target_user: req.user.id,
+        amount: item.data.price,
+      });
+      if (deductErr || !deducted) {
         return res.status(400).json({ error: 'Not enough ranking points' });
       }
-      await db.updateProfile(req.user.id, { ranking_points: profile.ranking_points - item.data.price });
     }
     await supabase.from('marketplace_purchases').insert({ user_id: req.user.id, item_id: req.params.id });
     await supabase.from('marketplace_items').update({ downloads: (item.data.downloads || 0) + 1 }).eq('id', req.params.id);
     res.json({ purchased: true, asset_data: item.data.asset_data });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Review item
@@ -432,7 +481,7 @@ app.post('/api/marketplace/:id/review', requireAuth, async (req, res) => {
       await supabase.from('marketplace_items').update({ rating: Math.round(avg * 100) / 100 }).eq('id', req.params.id);
     }
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // ==================== SOCIAL API ====================
@@ -448,7 +497,7 @@ app.get('/api/users/:id', async (req, res) => {
       .select('*').eq('creator_id', req.params.id).eq('status', 'approved')
       .order('created_at', { ascending: false }).limit(20);
     res.json({ ...profile, items: items || [] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Follow user
@@ -464,17 +513,22 @@ app.post('/api/follow/:userId', requireAuth, async (req, res) => {
     await supabase.rpc('increment_followers', { target_user: req.params.userId });
     await supabase.rpc('increment_following', { target_user: req.user.id });
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Unfollow user
 app.delete('/api/follow/:userId', requireAuth, async (req, res) => {
   try {
-    const { error } = await supabase.from('follows').delete()
-      .eq('follower_id', req.user.id).eq('following_id', req.params.userId);
+    const { data, error } = await supabase.from('follows').delete()
+      .eq('follower_id', req.user.id).eq('following_id', req.params.userId)
+      .select();
     if (error) throw error;
+    if (data && data.length > 0) {
+      await supabase.rpc('decrement_followers', { target_user: req.params.userId }).catch(() => {});
+      await supabase.rpc('decrement_following', { target_user: req.user.id }).catch(() => {});
+    }
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[unfollow]', e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Direct messages — list conversations
@@ -486,7 +540,7 @@ app.get('/api/messages', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false }).limit(100);
     if (error) throw error;
     res.json(data || []);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Send direct message
@@ -499,7 +553,7 @@ app.post('/api/messages/:userId', requireAuth, async (req, res) => {
     });
     if (error) throw error;
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Activity feed
@@ -515,7 +569,7 @@ app.get('/api/feed', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false }).limit(50);
     if (error) throw error;
     res.json(data || []);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 // ==================== STRIPE CHECKOUT ====================
@@ -556,7 +610,7 @@ app.post('/api/create-checkout', requireAuth, async (req, res) => {
     res.json({ url: session.url });
   } catch (e) {
     console.error('[Stripe] Checkout error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -583,6 +637,21 @@ async function generateRoomCode() {
 
 io.on('connection', (socket) => {
   console.log(`[+] ${socket.id} connected (user: ${socket.data.userId})`);
+
+  // Per-socket event throttle to prevent spam/DoS
+  const eventCounts = {};
+  const originalEmit = socket.onevent;
+  socket.onevent = function(packet) {
+    const event = packet.data?.[0];
+    if (event) {
+      const now = Date.now();
+      if (!eventCounts[event]) eventCounts[event] = { count: 0, reset: now + 1000 };
+      if (now > eventCounts[event].reset) { eventCounts[event] = { count: 0, reset: now + 1000 }; }
+      eventCounts[event].count++;
+      if (eventCounts[event].count > 30) return; // silently drop
+    }
+    originalEmit.call(this, packet);
+  };
 
   // ---- CREATE GAME ----
   socket.on('create-game', async ({ playerName, randomColor, gameType = 'classic', preferredColors }, callback) => {
@@ -703,6 +772,13 @@ io.on('connection', (socket) => {
       const game = await db.getGame(gameId);
       if (!game) return callback({ error: 'Game not found' });
 
+      // Verify the caller actually owns this seat
+      const players = await db.getPlayers(gameId);
+      const seat = players.find(p => p.color === color);
+      if (!seat || (seat.user_id && seat.user_id !== socket.data.userId)) {
+        return callback({ error: 'Not your seat' });
+      }
+
       const gameType = game.game_type || 'classic';
       await db.updatePlayerSocket(gameId, color, socket.id, true);
       socket.join(gameId);
@@ -714,13 +790,13 @@ io.on('connection', (socket) => {
         activeGames.set(gameId, state);
       }
 
-      const [players, moves, chat] = await Promise.all([
+      const [allPlayers, moves, chat] = await Promise.all([
         db.getPlayers(gameId),
         db.getMoves(gameId),
         db.getChatMessages(gameId)
       ]);
 
-      callback({ state: sanitizeState(state), players: sortPlayers(players), moves, chat, gameType });
+      callback({ state: sanitizeState(state), players: sortPlayers(allPlayers), moves, chat, gameType });
       socket.to(gameId).emit('player-reconnected', { color, name: playerName });
       console.log(`[Game] ${playerName} rejoined ${gameId}`);
 
@@ -933,6 +1009,11 @@ io.on('connection', (socket) => {
       const game = await db.getGame(gameId);
       const players = await db.getPlayers(gameId);
       if (players.length < 1) return callback({ error: 'Need at least 1 player' });
+      // Only the first player (game creator) can start the game
+      const creator = players[0];
+      if (creator.user_id && creator.user_id !== socket.data.userId) {
+        return callback({ error: 'Only the game creator can start the game' });
+      }
 
       const eng = getEngine(gameType || game.game_type);
       const state = activeGames.get(gameId);

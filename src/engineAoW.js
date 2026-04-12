@@ -307,6 +307,7 @@ function advanceTurn(state) {
 }
 
 function skipTurn(state) {
+  if (hasAnyValidMove(state)) return { error: 'You have valid moves' };
   const next = cloneState(state);
   advanceTurn(next);
   return { state: next };
