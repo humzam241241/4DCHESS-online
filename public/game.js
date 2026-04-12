@@ -879,6 +879,11 @@ function addChatMessage(data) {
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     haptic('light');
+    // Leaving rewatch mode by clicking any other tab
+    if (tab.dataset.tab !== 'rewatch' && replayMode && typeof exitRewatch === 'function') {
+      exitRewatch();
+      return;
+    }
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');

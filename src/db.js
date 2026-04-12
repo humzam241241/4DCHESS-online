@@ -139,8 +139,8 @@ async function recordMove(gameId, move) {
     to_col: move.to.col,
     captured_type: move.captured?.type || null,
     captured_color: move.captured?.color || null,
-    dice_1: move.dice?.[0] ?? null,
-    dice_2: move.dice?.[1] ?? null,
+    dice_1: move.dice?.[0] ?? '',
+    dice_2: move.dice?.[1] ?? '',
     notation: `${move.piece} ${move.from.notation}-${move.to.notation}`
   });
   if (error) throw error;
