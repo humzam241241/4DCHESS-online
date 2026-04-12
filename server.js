@@ -39,8 +39,14 @@ const CORS_ORIGINS = [
   'http://localhost:3000',
   'https://chaturaji-4dchess.vercel.app',
 ];
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (CORS_ORIGINS.includes(origin)) return true;
+  // Allow Vercel preview deployments for this project
+  return /^https:\/\/chaturaji-4dchess.*\.vercel\.app$/.test(origin);
+}
 const io = new Server(server, {
-  cors: { origin: CORS_ORIGINS, methods: ['GET', 'POST'] }
+  cors: { origin: (origin, cb) => cb(null, isAllowedOrigin(origin)), methods: ['GET', 'POST'] }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -120,7 +126,7 @@ app.use((req, res, next) => {
 // CORS for REST API (Socket.IO has its own cors config above)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && CORS_ORIGINS.includes(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
