@@ -44,6 +44,7 @@ const PIECE_ABBR = {
 let gameType = 'classic'; // 'classic' | 'enochian'
 let selectedMode = 'classic';
 let selectedBoard = localStorage.getItem('chaturaji_board') || 'bw';
+let numberedDice = localStorage.getItem('chaturaji_numbered_dice') === 'true';
 const PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#22c55e', black: '#64748b' };
 const AOW_PLAYER_COLORS = { red: '#ef4444', yellow: '#eab308', green: '#3b82f6', black: '#64748b' };
 function playerColor(color) {
@@ -598,7 +599,12 @@ function renderDice() {
 
   const isMyTurn = gameState.currentPlayer === myColor;
 
+  const DICE_NUMBERS = { king: '1', elephant: '2', horse: '3', boat: '4' };
   function dieFaceHTML(face) {
+    if (numberedDice) {
+      const num = DICE_NUMBERS[face] || '?';
+      return `<span class="die-icon">${num}</span><span class="die-label">${face}</span>`;
+    }
     const icon = PIECE_ICONS[face] || '?';
     const abbr = PIECE_ABBR[face] || face;
     return `<span class="die-icon">${icon}</span><span class="die-label">${abbr}</span>`;
@@ -1607,6 +1613,17 @@ if (selectedBoard) {
   document.querySelector(`.customize-opt[data-board="${selectedBoard}"]`)?.classList.add('active');
   document.querySelectorAll('.customize-opt[data-board]').forEach(b => {
     if (b.dataset.board !== selectedBoard) b.classList.remove('active');
+  });
+}
+
+// Numbered dice toggle
+const chkNumberedDice = document.getElementById('chk-numbered-dice');
+if (chkNumberedDice) {
+  chkNumberedDice.checked = numberedDice;
+  chkNumberedDice.addEventListener('change', () => {
+    numberedDice = chkNumberedDice.checked;
+    localStorage.setItem('chaturaji_numbered_dice', numberedDice);
+    if (gameState) renderDice();
   });
 }
 

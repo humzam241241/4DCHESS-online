@@ -243,8 +243,10 @@ function executeMove(state, fromRow, fromCol, toRow, toCol) {
     }
   }
 
-  // Place moving piece (eliminatePlayer may have cleared [toRow][toCol])
-  next.board[toRow][toCol] = { type: movingType, color: fromCell.color };
+  // Place moving piece (preserve pawnOf for typed promotion badge)
+  const movedPiece = { type: movingType, color: fromCell.color };
+  if (movingType === 'pawn' && fromCell.pawnOf) movedPiece.pawnOf = fromCell.pawnOf;
+  next.board[toRow][toCol] = movedPiece;
 
   // Leave partner behind on throne (or clear the square)
   next.board[fromRow][fromCol] = leftBehind || null;

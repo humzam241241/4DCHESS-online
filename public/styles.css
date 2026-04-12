@@ -499,7 +499,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
   transition: box-shadow 0.3s var(--ease-out);
 }
-.player-row .name { flex: 1; word-break: break-word; }
+.player-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-row .pieces { color: var(--text-dim); font-size: 0.8em; font-variant-numeric: tabular-nums; }
 .player-row.eliminated { opacity: 0.25; text-decoration: line-through; }
 .player-row.current {

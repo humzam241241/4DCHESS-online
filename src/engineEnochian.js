@@ -402,8 +402,10 @@ function executeMove(state, fromRow, fromCol, toRow, toCol) {
     }
   }
 
-  // Place moving piece at destination
-  next.board[toRow][toCol] = { type: movingType, color: fromCell.color };
+  // Place moving piece at destination (preserve pawnOf for typed promotion badge)
+  const movedPiece = { type: movingType, color: fromCell.color };
+  if (movingType === 'pawn' && fromCell.pawnOf) movedPiece.pawnOf = fromCell.pawnOf;
+  next.board[toRow][toCol] = movedPiece;
 
   // Leave throne partner behind or clear origin
   next.board[fromRow][fromCol] = leftBehind || null;
