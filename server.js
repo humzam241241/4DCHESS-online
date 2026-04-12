@@ -33,6 +33,7 @@ function isPremium(profile) {
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const CORS_ORIGINS = [
   'http://localhost:3000',
