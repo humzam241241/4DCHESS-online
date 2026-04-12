@@ -12,10 +12,10 @@ const engineEnochian = require('./src/engineEnochian');
 const db = require('./src/db');
 const supabase = require('./src/supabase');
 
-// Fail fast on missing required env vars
+// Warn on missing env vars (don't crash — Render may inject them late)
 const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) { console.error(`FATAL: Missing env var ${key}`); process.exit(1); }
+  if (!process.env[key]) console.warn(`WARNING: Missing env var ${key}`);
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
