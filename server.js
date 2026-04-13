@@ -38,6 +38,8 @@ const server = http.createServer(app);
 const CORS_ORIGINS = [
   'http://localhost:3000',
   'https://chaturaji-4dchess.vercel.app',
+  'https://chauraji.com',
+  'https://www.chauraji.com',
 ];
 function isAllowedOrigin(origin) {
   if (!origin) return false;
